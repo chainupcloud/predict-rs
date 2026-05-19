@@ -4,10 +4,21 @@ use std::collections::HashMap;
 use std::fmt;
 
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 
 use crate::types::{Side, SignatureType};
+
+/// Deserializer helper: chainup sometimes returns `null` instead of `[]` for empty list
+/// fields (e.g. `associate_trades` on a freshly placed order with no fills, `data` on a
+/// `/orders` page with no results). Treat `null` as an empty vec.
+fn null_as_empty_vec<'de, D, T>(d: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<Vec<T>>::deserialize(d).map(Option::unwrap_or_default)
+}
 
 // ─── Public market-data responses ───────────────────────────────────────────
 
@@ -518,7 +529,7 @@ pub struct OpenOrderResponse {
     pub order_type: String,
     #[serde(default, rename = "created_at")]
     pub created_at: String,
-    #[serde(default, rename = "associate_trades")]
+    #[serde(default, rename = "associate_trades", deserialize_with = "null_as_empty_vec")]
     pub associate_trades: Vec<String>,
     #[serde(default)]
     pub lazy: bool,
@@ -579,6 +590,7 @@ pub struct TradeResponse {
 /// `"-1"`) — see [`Page::END_CURSOR`]. The empty string is also treated as end-of-stream for
 /// resilience.
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(bound(deserialize = "T: Deserialize<'de>"))]
 pub struct Page<T> {
     /// Page-size echoed by the server.
     #[serde(default)]
@@ -589,7 +601,7 @@ pub struct Page<T> {
     /// Opaque cursor for the next page; `"LTE="` means no more data.
     #[serde(default, rename = "next_cursor")]
     pub next_cursor: String,
-    #[serde(default = "Vec::new")]
+    #[serde(default, deserialize_with = "null_as_empty_vec")]
     pub data: Vec<T>,
 }
 
