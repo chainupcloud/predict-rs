@@ -107,6 +107,23 @@ impl Client {
         self.inner.chain_id
     }
 
+    /// Construct a [`crate::gamma::GammaClient`] sharing this client's HTTP pool.
+    ///
+    /// Errors with [`Error::Validation`] if no Gamma endpoint was configured
+    /// (i.e. the client was built via `--clob-endpoint` only, without `--tenant`
+    /// or an explicit `--gamma-endpoint`).
+    pub fn gamma(&self) -> Result<crate::gamma::GammaClient> {
+        let base = self.gamma_url().ok_or_else(|| {
+            Error::validation(
+                "gamma endpoint not configured: pass --gamma-endpoint or use --tenant",
+            )
+        })?;
+        Ok(crate::gamma::GammaClient::new(
+            self.inner.http.clone(),
+            base.clone(),
+        ))
+    }
+
     /// Health check — `GET /ok`. Returns the raw body (`"OK"` for the chainup server).
     pub async fn ok(&self) -> Result<String> {
         let url = self.clob("/ok")?;

@@ -16,12 +16,14 @@ pub mod client;
 pub mod clob;
 pub mod endpoints;
 pub mod error;
+pub mod gamma;
 pub mod signer;
 pub mod types;
 
 pub use client::{Client, ClientBuilder};
 pub use endpoints::Endpoints;
 pub use error::{Error, Result};
+pub use gamma::GammaClient;
 
 /// Default `pm-cup2026` dev endpoint.
 pub const DEFAULT_ENDPOINT: &str = "https://clob-api.predict.prax1s.xyz";
