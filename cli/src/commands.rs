@@ -198,8 +198,8 @@ async fn run_auth(args: &Cli, sub: &AuthCommand, fmt: Format) -> anyhow::Result<
         AuthCommand::CreateKey(a) => {
             let signer = signer_from_args(args)?;
             let client = build_l1_client(args)?;
-            let CreateKeyArgs { nonce, signature_type, funder } = a;
-            let _ = (signature_type, funder); // accepted for forward compatibility (Phase 2.2)
+            let CreateKeyArgs { nonce, funder } = a;
+            let _ = funder; // accepted for forward compatibility (Phase 2.2)
             let creds = client.create_api_key(&signer, Some(*nonce)).await?;
             print_credentials(&creds, fmt)?;
         }
@@ -280,6 +280,30 @@ pub(crate) fn signer_from_args(args: &Cli) -> anyhow::Result<PMCup26Signer> {
 fn effective_chain_id(args: &Cli) -> anyhow::Result<Option<u64>> {
     let stored = crate::config_store::load(args.config_dir.as_deref())?;
     effective_chain_id_with(args, stored.as_ref())
+}
+
+/// Resolve the EIP-712 signature type for the current invocation. Order: global flag /
+/// env > stored `config.toml` > default `gnosis-safe` (chainup's standard Safe-wallet flow).
+pub(crate) fn effective_signature_type(
+    args: &Cli,
+) -> anyhow::Result<pm_rs_clob_client::types::SignatureType> {
+    use crate::cli::SignatureTypeArg;
+    if let Some(s) = args.signature_type {
+        return Ok(s.into());
+    }
+    let stored = crate::config_store::load(args.config_dir.as_deref())?;
+    let parsed = match stored.as_ref().and_then(|c| c.signature_type.as_deref()) {
+        Some("eoa") => Some(SignatureTypeArg::Eoa),
+        Some("proxy") => Some(SignatureTypeArg::Proxy),
+        Some("gnosis-safe") => Some(SignatureTypeArg::GnosisSafe),
+        Some(other) => {
+            return Err(anyhow!(
+                "config.toml: unrecognised signature_type '{other}' (expected eoa|proxy|gnosis-safe)"
+            ));
+        }
+        None => None,
+    };
+    Ok(parsed.unwrap_or(SignatureTypeArg::GnosisSafe).into())
 }
 
 fn effective_chain_id_with(

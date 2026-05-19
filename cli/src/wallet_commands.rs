@@ -4,6 +4,7 @@
 //! `<config-dir>/config.toml` only; no network calls.
 
 use std::io::{BufRead, Write as _};
+use std::str::FromStr;
 
 use alloy::signers::local::PrivateKeySigner;
 use anyhow::{Context, Result, anyhow, bail};
@@ -21,10 +22,15 @@ pub enum WalletCommand {
     Import(ImportArgs),
     /// Print the EOA address resolved from the active key source (flag / env / config file).
     Address,
-    /// Print the active key's address plus where it was loaded from.
+    /// Print the active key's address, Safe address, signature type, and config source.
     Show,
     /// Delete `<config-dir>/config.toml`. Prompts unless `--force`.
     Reset(ResetArgs),
+    /// Persist the Safe wallet address to `<config-dir>/config.toml`.
+    SetSafe(SetSafeArgs),
+    /// Fetch the Safe address from the chainup server via `GET /auth/api-keys` and save it.
+    /// Requires an L2 key to already exist for the configured signer.
+    DetectSafe,
 }
 
 #[derive(Debug, Args)]
@@ -50,6 +56,15 @@ pub struct ResetArgs {
     pub force: bool,
 }
 
+#[derive(Debug, Args)]
+pub struct SetSafeArgs {
+    /// Safe wallet address (`0x` + 40 hex). Pass `--clear` to wipe the stored value.
+    pub address: Option<String>,
+    /// Remove any persisted Safe address.
+    #[arg(long, conflicts_with = "address")]
+    pub clear: bool,
+}
+
 pub async fn run(args: &Cli, sub: &WalletCommand, fmt: Format) -> Result<()> {
     let dir_override = args.config_dir.as_deref();
     match sub {
@@ -58,6 +73,8 @@ pub async fn run(args: &Cli, sub: &WalletCommand, fmt: Format) -> Result<()> {
         WalletCommand::Address => run_address(args, fmt),
         WalletCommand::Show => run_show(args, fmt),
         WalletCommand::Reset(a) => run_reset(dir_override, a.force, fmt),
+        WalletCommand::SetSafe(a) => run_set_safe(dir_override, a, fmt),
+        WalletCommand::DetectSafe => run_detect_safe(args, fmt).await,
     }
 }
 
@@ -115,6 +132,12 @@ fn run_address(args: &Cli, fmt: Format) -> Result<()> {
 fn run_show(args: &Cli, fmt: Format) -> Result<()> {
     let dir_override = args.config_dir.as_deref();
     let path = config_store::config_path(dir_override)?;
+    let stored = config_store::load(dir_override)?;
+    let safe_address = stored.as_ref().and_then(|c| c.safe_address.clone());
+    let signature_type = stored
+        .as_ref()
+        .and_then(|c| c.signature_type.clone())
+        .or_else(|| args.signature_type.map(|s| format!("{s:?}").to_lowercase()));
     match resolve_private_key(args) {
         Ok((pk, source)) => {
             let signer = parse_signer(&pk)?;
@@ -122,13 +145,17 @@ fn run_show(args: &Cli, fmt: Format) -> Result<()> {
             match fmt {
                 Format::Json => output::print_json(&serde_json::json!({
                     "address": address,
+                    "safe_address": safe_address,
+                    "signature_type": signature_type,
                     "source": source,
                     "config_path": path.display().to_string(),
                 }))?,
                 Format::Table => {
-                    println!("address    : {address}");
-                    println!("source     : {source}");
-                    println!("config path: {}", path.display());
+                    println!("address       : {address}");
+                    println!("safe address  : {}", safe_address.as_deref().unwrap_or("(none — run `pm wallet set-safe <addr>` or `pm wallet detect-safe`)"));
+                    println!("signature type: {}", signature_type.as_deref().unwrap_or("gnosis-safe (default)"));
+                    println!("source        : {source}");
+                    println!("config path   : {}", path.display());
                 }
             }
             Ok(())
@@ -136,17 +163,87 @@ fn run_show(args: &Cli, fmt: Format) -> Result<()> {
         Err(_) => match fmt {
             Format::Json => output::print_json(&serde_json::json!({
                 "address": serde_json::Value::Null,
+                "safe_address": safe_address,
+                "signature_type": signature_type,
                 "source": "none",
                 "config_path": path.display().to_string(),
             })),
             Format::Table => {
-                println!("address    : (none configured)");
-                println!("source     : none");
-                println!("config path: {}", path.display());
+                println!("address       : (none configured)");
+                println!("safe address  : {}", safe_address.as_deref().unwrap_or("(none)"));
+                println!("signature type: {}", signature_type.as_deref().unwrap_or("gnosis-safe (default)"));
+                println!("source        : none");
+                println!("config path   : {}", path.display());
                 Ok(())
             }
         },
     }
+}
+
+fn run_set_safe(dir_override: Option<&str>, a: &SetSafeArgs, fmt: Format) -> Result<()> {
+    let mut cfg = config_store::load(dir_override)?.unwrap_or_default();
+    let action: &str;
+    let stored_value: Option<String>;
+    if a.clear {
+        cfg.safe_address = None;
+        action = "cleared";
+        stored_value = None;
+    } else {
+        let addr = a
+            .address
+            .as_deref()
+            .ok_or_else(|| anyhow!("provide an address or pass --clear"))?;
+        // Validate by parsing through alloy.
+        let parsed = alloy::primitives::Address::from_str(addr)
+            .map_err(|e| anyhow!("invalid Safe address '{addr}': {e}"))?;
+        let canonical = format!("{parsed:?}");
+        cfg.safe_address = Some(canonical.clone());
+        action = "stored";
+        stored_value = Some(canonical);
+    }
+    let path = config_store::save(dir_override, &cfg)?;
+    match fmt {
+        Format::Json => output::print_json(&serde_json::json!({
+            "action": action,
+            "safe_address": stored_value,
+            "path": path.display().to_string(),
+        }))?,
+        Format::Table => match &stored_value {
+            Some(v) => println!("stored safe_address = {v} ({})", path.display()),
+            None => println!("cleared safe_address ({})", path.display()),
+        },
+    }
+    Ok(())
+}
+
+async fn run_detect_safe(args: &Cli, fmt: Format) -> Result<()> {
+    let dir_override = args.config_dir.as_deref();
+    let info = crate::commands::with_l2_credentials(args, |c| async move { c.api_keys().await })
+        .await?;
+    let safe_str = info.proxy_wallet.ok_or_else(|| {
+        anyhow!(
+            "server response carried no `proxy_wallet`. Has `pm auth create-key` been run for the configured signer?"
+        )
+    })?;
+    let parsed = alloy::primitives::Address::from_str(&safe_str)
+        .map_err(|e| anyhow!("server returned invalid Safe address '{safe_str}': {e}"))?;
+    let canonical = format!("{parsed:?}");
+    let mut cfg = config_store::load(dir_override)?.unwrap_or_default();
+    cfg.safe_address = Some(canonical.clone());
+    let path = config_store::save(dir_override, &cfg)?;
+    match fmt {
+        Format::Json => output::print_json(&serde_json::json!({
+            "source": "server",
+            "safe_address": canonical,
+            "path": path.display().to_string(),
+        }))?,
+        Format::Table => {
+            println!("detected safe_address = {canonical}");
+            println!("source                = chainup server (GET /auth/api-keys)");
+            println!("saved at              = {}", path.display());
+        }
+    }
+    Ok(())
 }
 
 fn run_reset(dir_override: Option<&str>, force: bool, fmt: Format) -> Result<()> {
@@ -293,5 +390,59 @@ mod tests {
         run_create(Some(&dir), false, Format::Json).unwrap();
         run_reset(Some(&dir), true, Format::Json).unwrap();
         assert!(config_store::load(Some(&dir)).unwrap().is_none());
+    }
+
+    #[test]
+    fn set_safe_persists_canonical_address() {
+        let t = TempDir::new().unwrap();
+        let dir = t.path().to_string_lossy().into_owned();
+        let raw = "0x017641abFa4264121237023f9Fe678BF00F60De8";
+        run_set_safe(
+            Some(&dir),
+            &SetSafeArgs { address: Some(raw.into()), clear: false },
+            Format::Json,
+        )
+        .unwrap();
+        let cfg = config_store::load(Some(&dir)).unwrap().unwrap();
+        // alloy::primitives::Address debug-prints lower-case 0x prefixed hex.
+        assert_eq!(
+            cfg.safe_address.as_deref(),
+            Some("0x017641abfa4264121237023f9fe678bf00f60de8")
+        );
+    }
+
+    #[test]
+    fn set_safe_rejects_garbage() {
+        let t = TempDir::new().unwrap();
+        let dir = t.path().to_string_lossy().into_owned();
+        let err = run_set_safe(
+            Some(&dir),
+            &SetSafeArgs { address: Some("nope".into()), clear: false },
+            Format::Json,
+        )
+        .unwrap_err();
+        assert!(format!("{err}").contains("invalid Safe address"));
+    }
+
+    #[test]
+    fn set_safe_clear_wipes_entry() {
+        let t = TempDir::new().unwrap();
+        let dir = t.path().to_string_lossy().into_owned();
+        run_set_safe(
+            Some(&dir),
+            &SetSafeArgs { address: Some("0x017641abFa4264121237023f9Fe678BF00F60De8".into()), clear: false },
+            Format::Json,
+        )
+        .unwrap();
+        run_set_safe(
+            Some(&dir),
+            &SetSafeArgs { address: None, clear: true },
+            Format::Json,
+        )
+        .unwrap();
+        let cfg = config_store::load(Some(&dir)).unwrap().unwrap();
+        assert!(cfg.safe_address.is_none());
+        // Other fields preserved.
+        assert!(cfg.private_key.is_none());
     }
 }

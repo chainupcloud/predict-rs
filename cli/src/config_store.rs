@@ -36,6 +36,11 @@ pub struct StoredConfig {
     /// One of `eoa` / `proxy` / `gnosis-safe` (matches the `SignatureTypeArg` clap value).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature_type: Option<String>,
+    /// Safe wallet (`bytes20` hex). Required by chainup's default `signatureType=gnosis-safe`
+    /// flows since the Safe — not the EOA — holds USDC / CTF balances. Populate via
+    /// `pm wallet set-safe <addr>` (manual) or `pm wallet detect-safe` (one server call).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub safe_address: Option<String>,
 }
 
 /// Resolve the directory holding `config.toml`, honoring `--config-dir` then `PM_CONFIG_DIR`
@@ -173,6 +178,7 @@ mod tests {
             chain_id: Some(11155420),
             scope_id: Some("0x0000000000000000000000000000000000000000000000000000000000000001".into()),
             signature_type: Some("gnosis-safe".into()),
+            safe_address: Some("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef".into()),
         };
         let path = save(Some(&dir), &cfg).unwrap();
         assert!(path.exists());

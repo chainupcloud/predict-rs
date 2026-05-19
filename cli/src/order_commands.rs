@@ -20,7 +20,7 @@ use pm_rs_clob_client::clob::types::{
 use pm_rs_clob_client::types::{Address, SignatureType, U256};
 use pm_rs_clob_client::{PMCup26Signer, Side};
 
-use crate::cli::{Cli, SideArg, SignatureTypeArg};
+use crate::cli::{Cli, SideArg};
 use crate::commands::{parse_address, signer_from_args, with_l2_credentials};
 use crate::output::{self, Format};
 
@@ -95,15 +95,13 @@ pub struct CreateArgs {
     /// minimum.
     #[arg(long)]
     pub fee_rate_bps: u64,
-    /// Maker (Safe-wallet) address. Required for `signatureType = gnosis-safe` (default).
+    /// Maker (Safe-wallet) address. Required when the global `--signature-type gnosis-safe`
+    /// (default) is in effect.
     #[arg(long)]
     pub maker: Option<String>,
     /// Taker address (default zero = any taker).
     #[arg(long)]
     pub taker: Option<String>,
-    /// EIP-712 signature type. Default `gnosis-safe`.
-    #[arg(long, value_enum, default_value = "gnosis-safe")]
-    pub signature_type: SignatureTypeArg,
     /// Optional `owner` UUID. When empty the server uses the API-key owner.
     #[arg(long)]
     pub owner: Option<String>,
@@ -150,9 +148,6 @@ pub struct MarketArgs {
     /// Taker address (default zero = any taker).
     #[arg(long)]
     pub taker: Option<String>,
-    /// EIP-712 signature type. Default `gnosis-safe`.
-    #[arg(long, value_enum, default_value = "gnosis-safe")]
-    pub signature_type: SignatureTypeArg,
     /// Optional `owner` UUID. When empty the server uses the API-key owner.
     #[arg(long)]
     pub owner: Option<String>,
@@ -182,7 +177,6 @@ impl MarketArgs {
             fee_rate_bps: self.fee_rate_bps,
             maker: self.maker.clone(),
             taker: self.taker.clone(),
-            signature_type: self.signature_type,
             owner: self.owner.clone(),
             salt: self.salt.clone(),
             dry_run: self.dry_run,
@@ -227,9 +221,6 @@ pub struct PostBatchArgs {
     /// Shared taker address (default zero = any taker).
     #[arg(long)]
     pub taker: Option<String>,
-    /// Shared EIP-712 signature type. Default `gnosis-safe`.
-    #[arg(long, value_enum, default_value = "gnosis-safe")]
-    pub signature_type: SignatureTypeArg,
     /// Optional shared `owner` UUID. When empty the server uses the API-key owner.
     #[arg(long)]
     pub owner: Option<String>,
@@ -395,12 +386,13 @@ pub async fn run_heartbeat(args: &Cli, fmt: Format) -> anyhow::Result<()> {
 // ─── order subcommands ───────────────────────────────────────────────────
 
 async fn run_create(args: &Cli, a: &CreateArgs, fmt: Format) -> anyhow::Result<()> {
+    let signature_type = crate::commands::effective_signature_type(args)?;
     let signer = signer_from_args(args)?;
     if signer.address() == Address::ZERO {
         // Defensive: signer derivation should always yield a non-zero address.
         return Err(anyhow!("signer derived a zero address"));
     }
-    let (signable, signed) = build_signed_order(&signer, a)?;
+    let (signable, signed) = build_signed_order(&signer, a, signature_type)?;
     if a.dry_run {
         // Print the full SendOrder envelope shape — what the CLI would POST.
         let envelope = SendOrderRequest {
@@ -461,6 +453,7 @@ async fn run_post_batch(args: &Cli, a: &PostBatchArgs, fmt: Format) -> anyhow::R
         .collect::<anyhow::Result<_>>()?;
 
     let signer = signer_from_args(args)?;
+    let signature_type = crate::commands::effective_signature_type(args)?;
     let mut signables: Vec<SignableOrder> = Vec::with_capacity(tokens.len());
     let mut signed: Vec<SignedOrder> = Vec::with_capacity(tokens.len());
     for ((token, price), size) in tokens.iter().zip(&prices).zip(&sizes) {
@@ -479,12 +472,11 @@ async fn run_post_batch(args: &Cli, a: &PostBatchArgs, fmt: Format) -> anyhow::R
             fee_rate_bps: a.fee_rate_bps,
             maker: a.maker.clone(),
             taker: a.taker.clone(),
-            signature_type: a.signature_type,
             owner: a.owner.clone(),
             salt: None,
             dry_run: false,
         };
-        let (sg, so) = build_signed_order(&signer, &create)?;
+        let (sg, so) = build_signed_order(&signer, &create, signature_type)?;
         signables.push(sg);
         signed.push(so);
     }
@@ -644,11 +636,11 @@ async fn run_scoring(args: &Cli, a: &ScoringArgs, fmt: Format) -> anyhow::Result
 fn build_signed_order(
     signer: &PMCup26Signer,
     a: &CreateArgs,
+    signature_type: SignatureType,
 ) -> anyhow::Result<(SignableOrder, SignedOrder)> {
     let token_id = U256::from_str(&a.token)
         .with_context(|| format!("invalid --token (must be uint256 decimal): {}", a.token))?;
     let side: Side = a.side.into();
-    let signature_type: SignatureType = a.signature_type.into();
 
     let maker = match &a.maker {
         Some(s) => parse_address(s).with_context(|| format!("invalid --maker {s}"))?,
@@ -933,7 +925,6 @@ mod tests {
             fee_rate_bps: 100,
             maker: Some("0x0000000000000000000000000000000000000001".into()),
             taker: None,
-            signature_type: SignatureTypeArg::GnosisSafe,
             owner: None,
             salt: None,
             dry_run: true,

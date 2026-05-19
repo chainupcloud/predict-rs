@@ -155,10 +155,27 @@ fn resolve_owner(args: &Cli, override_address: Option<&str>) -> Result<Address> 
     if let Some(s) = override_address {
         return parse_addr(s).with_context(|| format!("invalid --address '{s}'"));
     }
-    // Fallback: EOA from the configured wallet.
-    let (pk, _source) = crate::wallet_commands::resolve_private_key(args)?;
-    let signer = parse_signer(&pk)?;
-    Ok(signer.address())
+    let sig_type = crate::commands::effective_signature_type(args)?;
+    if sig_type == pm_rs_clob_client::types::SignatureType::Eoa {
+        let (pk, _source) = crate::wallet_commands::resolve_private_key(args)?;
+        let signer = parse_signer(&pk)?;
+        return Ok(signer.address());
+    }
+    // Safe / Proxy modes: the EOA holds no funds. Use the stored Safe address.
+    let stored = crate::config_store::load(args.config_dir.as_deref())?;
+    let safe = stored
+        .as_ref()
+        .and_then(|c| c.safe_address.as_deref())
+        .ok_or_else(|| {
+            anyhow!(
+                "owner unresolved: signature_type={sig_type:?} needs a Safe address. Either:\n\
+                 - run `pm wallet detect-safe` (fetches it from the chainup server, requires L2 creds), or\n\
+                 - run `pm wallet set-safe <addr>` (paste it yourself), or\n\
+                 - pass `--address <addr>` explicitly, or\n\
+                 - re-run with `--signature-type eoa` to check the EOA instead."
+            )
+        })?;
+    parse_addr(safe).with_context(|| format!("invalid stored safe_address '{safe}'"))
 }
 
 fn parse_signer(hex_str: &str) -> Result<alloy::signers::local::PrivateKeySigner> {

@@ -47,6 +47,13 @@ pub struct Cli {
     #[arg(long, global = true, env = "PM_CONFIG_DIR")]
     pub config_dir: Option<String>,
 
+    /// Global EIP-712 signature type (`eoa` / `proxy` / `gnosis-safe`). Defaults to
+    /// `gnosis-safe` — chainup's Safe-wallet flow where the EOA signs but the Safe holds
+    /// funds and is the `maker`. Persisted by `pm wallet create / import / set-safe`;
+    /// the flag overrides the stored value for the current invocation only.
+    #[arg(long, global = true, env = "PM_SIGNATURE_TYPE")]
+    pub signature_type: Option<SignatureTypeArg>,
+
     /// CTFExchange contract address. Currently unused on Phase 2.1 paths (`order` flows land
     /// in Phase 2.2) but accepted up front so workflows that combine auth + order placement
     /// share the same env layout.
@@ -198,12 +205,8 @@ pub struct CreateKeyArgs {
     /// Nonce embedded in the `ClobAuth` EIP-712 message (default 0).
     #[arg(long, default_value_t = 0)]
     pub nonce: u32,
-    /// Signature type — accepted up-front so the same env layout can be reused by the
-    /// order-placement subcommands that land in Phase 2.2. The L1 server does not read this.
-    #[arg(long, value_enum, default_value = "gnosis-safe")]
-    pub signature_type: SignatureTypeArg,
-    /// Optional funder address for proxy / Safe flows — see `--signature-type`. Not consumed
-    /// by Phase 2.1 paths.
+    /// Optional funder address for proxy / Safe flows. Not consumed by Phase 2.1 paths;
+    /// see the global `--signature-type` for the EIP-712 signing mode.
     #[arg(long)]
     pub funder: Option<String>,
 }
