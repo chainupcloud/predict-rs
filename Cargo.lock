@@ -3428,6 +3428,7 @@ dependencies = [
  "hex",
  "pm-rs-clob-client",
  "rust_decimal",
+ "rustls",
  "secrecy",
  "serde",
  "serde_json",

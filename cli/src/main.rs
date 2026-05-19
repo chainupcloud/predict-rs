@@ -13,6 +13,13 @@ use clap::Parser;
 
 #[tokio::main]
 async fn main() {
+    // Pulled in transitively by both `tokio-tungstenite` (rustls 0.21 via 0.23) and
+    // `alloy`'s `providers`/`contract` features (rustls 0.23). Rustls 0.23 refuses to start
+    // without an explicit default crypto provider when more than one TLS dep is in the
+    // graph. Install the `ring` provider at process start; ignore the "already installed"
+    // error so re-running in tests is idempotent.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let args = cli::Cli::parse();
     let format = args.output;
 

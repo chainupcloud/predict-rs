@@ -21,6 +21,7 @@ clap = { workspace = true }
 dirs = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 futures-util = { workspace = true }
 rust_decimal = { workspace = true }
 secrecy = { workspace = true }
