@@ -34,6 +34,24 @@ pub struct Cli {
     #[arg(long, global = true, env = "PM_CHAIN_ID")]
     pub chain_id: Option<u64>,
 
+    /// EOA private key (hex, with or without `0x` prefix) used to sign L1 EIP-712 challenges.
+    /// Required by every Phase 2 subcommand. Prefer the env var over the flag — exposing a
+    /// private key in shell history is unsafe.
+    #[arg(long, global = true, env = "PM_PRIVATE_KEY", hide_env_values = true)]
+    pub private_key: Option<String>,
+
+    /// CTFExchange contract address. Currently unused on Phase 2.1 paths (`order` flows land
+    /// in Phase 2.2) but accepted up front so workflows that combine auth + order placement
+    /// share the same env layout.
+    #[arg(long, global = true, env = "PM_EXCHANGE_ADDRESS")]
+    pub exchange_address: Option<String>,
+
+    /// Pre-stored L2 credentials JSON file (matches the `/auth/api-key` response shape:
+    /// `{"apiKey": "...", "secret": "...", "passphrase": "..."}`). When absent, L2 commands
+    /// auto-derive via `GET /auth/derive-api-key` before issuing the real request.
+    #[arg(long, global = true, env = "PM_CREDENTIALS_FILE")]
+    pub credentials: Option<String>,
+
     /// Output format.
     #[arg(short = 'o', long, global = true, env = "PM_OUTPUT", default_value = "table")]
     pub output: Format,
@@ -66,6 +84,102 @@ pub enum Command {
     Endpoints,
     /// Gamma metadata API (events / markets / tags / series / comments / profiles / search).
     Gamma(crate::gamma_commands::GammaArgs),
+    /// L1 / L2 authentication: API-key management.
+    #[command(subcommand)]
+    Auth(AuthCommand),
+    /// `GET /balance-allowance` (or `/balance-allowance/update` with `--update`).
+    Balance(BalanceArgs),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AuthCommand {
+    /// `POST /auth/api-key` — create a new L2 API key for the signer.
+    CreateKey(CreateKeyArgs),
+    /// `GET /auth/derive-api-key` — recover the credentials for an existing key.
+    DeriveKey(DeriveKeyArgs),
+    /// `DELETE /auth/api-key` — revoke the L2 key for `(signer, scope, nonce)`.
+    DeleteKey(DeleteKeyArgs),
+    /// `GET /auth/api-keys` — list active API keys + chainup `proxy_wallet` (L2-auth).
+    ListKeys,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct CreateKeyArgs {
+    /// Nonce embedded in the `ClobAuth` EIP-712 message (default 0).
+    #[arg(long, default_value_t = 0)]
+    pub nonce: u32,
+    /// Signature type — accepted up-front so the same env layout can be reused by the
+    /// order-placement subcommands that land in Phase 2.2. The L1 server does not read this.
+    #[arg(long, value_enum, default_value = "gnosis-safe")]
+    pub signature_type: SignatureTypeArg,
+    /// Optional funder address for proxy / Safe flows — see `--signature-type`. Not consumed
+    /// by Phase 2.1 paths.
+    #[arg(long)]
+    pub funder: Option<String>,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct DeriveKeyArgs {
+    #[arg(long, default_value_t = 0)]
+    pub nonce: u32,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct DeleteKeyArgs {
+    /// API-key UUID (accepted for symmetry with rs-clob-client; the server identifies the
+    /// row by `(address, scope, nonce)`).
+    pub key: String,
+    #[arg(long, default_value_t = 0)]
+    pub nonce: u32,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct BalanceArgs {
+    /// Asset class: `collateral` (USDC) or `conditional` (outcome token).
+    #[arg(long, value_enum)]
+    pub asset_type: AssetTypeArg,
+    /// Token ID — required iff `--asset-type conditional`.
+    #[arg(long)]
+    pub token: Option<String>,
+    /// Use `GET /balance-allowance/update` (force subgraph refresh) instead of the cached
+    /// `/balance-allowance`.
+    #[arg(long)]
+    pub update: bool,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum SignatureTypeArg {
+    /// signatureType=0 — direct EOA signing.
+    Eoa,
+    /// signatureType=1 — Polymarket proxy wallet.
+    Proxy,
+    /// signatureType=2 — Gnosis Safe (1-of-1) — chainup default.
+    GnosisSafe,
+}
+
+impl From<SignatureTypeArg> for pm_rs_clob_client::types::SignatureType {
+    fn from(v: SignatureTypeArg) -> Self {
+        match v {
+            SignatureTypeArg::Eoa => Self::Eoa,
+            SignatureTypeArg::Proxy => Self::PolyProxy,
+            SignatureTypeArg::GnosisSafe => Self::PolyGnosisSafe,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum AssetTypeArg {
+    Collateral,
+    Conditional,
+}
+
+impl From<AssetTypeArg> for pm_rs_clob_client::AssetType {
+    fn from(v: AssetTypeArg) -> Self {
+        match v {
+            AssetTypeArg::Collateral => Self::Collateral,
+            AssetTypeArg::Conditional => Self::Conditional,
+        }
+    }
 }
 
 #[derive(Debug, clap::Args)]

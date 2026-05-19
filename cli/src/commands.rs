@@ -3,26 +3,44 @@
 use anyhow::{Context, anyhow};
 use chrono::DateTime;
 use pm_rs_clob_client::clob::types::OrderBookSummary;
-use pm_rs_clob_client::{Client, Endpoints};
+use pm_rs_clob_client::types::ScopeId;
+use pm_rs_clob_client::{
+    ApiKeyInfo, AssetType, BalanceAllowanceResponse, Client, ClientBuilder, Credentials, Endpoints,
+    PMCup26Signer,
+};
+use secrecy::ExposeSecret;
 use tabled::Tabled;
 use url::Url;
 
-use crate::cli::{Cli, Command};
+use crate::cli::{AuthCommand, BalanceArgs, Cli, Command, CreateKeyArgs, DeleteKeyArgs};
 use crate::output::{self, Format};
 
 pub async fn run(args: Cli) -> anyhow::Result<()> {
-    let mut builder = Client::builder();
-
     let endpoints = resolve_endpoints(&args)?;
-    builder = builder.endpoints(endpoints);
+    let mut builder = Client::builder().endpoints(endpoints);
     if let Some(cid) = args.chain_id {
         builder = builder.chain_id(cid);
     }
 
+    // The unauthenticated client is used for every Phase 1 read path and for L1 auth
+    // (POST/GET /auth/api-key); L2 paths re-build a client with credentials attached.
     let client = builder.build().context("build client")?;
     let fmt = args.output;
 
-    match args.command {
+    // `gamma_commands::run` consumes its `GammaArgs` by value. Handle it before the borrowing
+    // match below so we don't fight the borrow checker when other arms need `&args`.
+    if matches!(args.command, Command::Gamma(_)) {
+        let Cli {
+            command: Command::Gamma(gargs),
+            ..
+        } = args
+        else {
+            unreachable!("matches! guarded above")
+        };
+        return crate::gamma_commands::run(client, fmt, gargs).await;
+    }
+
+    match &args.command {
         Command::Endpoints => {
             print_endpoints(&client, fmt)?;
         }
@@ -70,8 +88,253 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
             let resp = client.last_trade_price(&a.token_id).await?;
             output::print_scalar("last_trade_price", resp.price, fmt)?;
         }
-        Command::Gamma(a) => {
-            crate::gamma_commands::run(client, fmt, a).await?;
+        Command::Gamma(_) => unreachable!("handled by early-return above"),
+        Command::Auth(sub) => run_auth(&args, sub, fmt).await?,
+        Command::Balance(a) => run_balance(&args, a, fmt).await?,
+    }
+    Ok(())
+}
+
+// ─── Phase 2.1: auth / balance dispatch ─────────────────────────────────
+
+async fn run_auth(args: &Cli, sub: &AuthCommand, fmt: Format) -> anyhow::Result<()> {
+    match sub {
+        AuthCommand::CreateKey(a) => {
+            let signer = signer_from_args(args)?;
+            let client = build_l1_client(args)?;
+            let CreateKeyArgs { nonce, signature_type, funder } = a;
+            let _ = (signature_type, funder); // accepted for forward compatibility (Phase 2.2)
+            let creds = client.create_api_key(&signer, Some(*nonce)).await?;
+            print_credentials(&creds, fmt)?;
+        }
+        AuthCommand::DeriveKey(a) => {
+            let signer = signer_from_args(args)?;
+            let client = build_l1_client(args)?;
+            let creds = client.derive_api_key(&signer, Some(a.nonce)).await?;
+            print_credentials(&creds, fmt)?;
+        }
+        AuthCommand::DeleteKey(a) => {
+            let DeleteKeyArgs { key, nonce } = a;
+            let signer = signer_from_args(args)?;
+            let client = build_l1_client(args)?;
+            let uuid = key
+                .parse::<uuid::Uuid>()
+                .with_context(|| format!("invalid API-key UUID '{key}'"))?;
+            delete_with_nonce(&client, &signer, uuid, *nonce).await?;
+        }
+        AuthCommand::ListKeys => {
+            let info = with_l2_credentials(args, |c| async move { c.api_keys().await }).await?;
+            print_api_keys(&info, fmt)?;
+        }
+    }
+    Ok(())
+}
+
+async fn run_balance(args: &Cli, a: &BalanceArgs, fmt: Format) -> anyhow::Result<()> {
+    let asset: AssetType = a.asset_type.into();
+    let token: Option<String> = a.token.clone();
+    let update = a.update;
+    let resp = with_l2_credentials(args, move |client| async move {
+        let token_ref = token.as_deref();
+        if update {
+            client.update_balance_allowance(asset, token_ref).await
+        } else {
+            client.balance_allowance(asset, token_ref).await
+        }
+    })
+    .await?;
+    print_balance(&resp, fmt)?;
+    Ok(())
+}
+
+// ─── helpers: signer / credentials / client builders ────────────────────
+
+fn signer_from_args(args: &Cli) -> anyhow::Result<PMCup26Signer> {
+    let pk = args.private_key.as_deref().ok_or_else(|| {
+        anyhow!(
+            "private key required for L1 auth: pass --private-key or set PM_PRIVATE_KEY"
+        )
+    })?;
+    let chain_id = args.chain_id.ok_or_else(|| {
+        anyhow!("chain id required for L1 auth: pass --chain-id or set PM_CHAIN_ID")
+    })?;
+    let mut signer = PMCup26Signer::from_hex(pk, chain_id)?;
+    if !args.scope_id.is_empty() {
+        let scope = ScopeId::from_hex(&args.scope_id)
+            .with_context(|| format!("invalid --scope-id '{}'", args.scope_id))?;
+        signer = signer.with_scope_id(scope);
+    }
+    if let Some(addr_hex) = &args.exchange_address {
+        let addr = parse_address(addr_hex)
+            .with_context(|| format!("invalid --exchange-address '{addr_hex}'"))?;
+        signer = signer.with_exchange(addr);
+    }
+    Ok(signer)
+}
+
+fn build_l1_client(args: &Cli) -> anyhow::Result<Client> {
+    let endpoints = resolve_endpoints(args)?;
+    let mut b = Client::builder().endpoints(endpoints);
+    if let Some(cid) = args.chain_id {
+        b = b.chain_id(cid);
+    }
+    b.build().context("build client")
+}
+
+fn build_l2_client(args: &Cli, creds: Credentials, signer: &PMCup26Signer) -> anyhow::Result<Client> {
+    let endpoints = resolve_endpoints(args)?;
+    let mut b: ClientBuilder = Client::builder().endpoints(endpoints);
+    if let Some(cid) = args.chain_id {
+        b = b.chain_id(cid);
+    }
+    Ok(b.credentials(creds).signer_address(signer.address()).build()?)
+}
+
+async fn with_l2_credentials<F, Fut, T>(args: &Cli, op: F) -> anyhow::Result<T>
+where
+    F: FnOnce(Client) -> Fut,
+    Fut: std::future::Future<Output = pm_rs_clob_client::Result<T>>,
+{
+    let signer = signer_from_args(args)?;
+    // Try the credentials file first, else auto-derive.
+    let creds = match args.credentials.as_ref() {
+        Some(p) => load_credentials_file(p)?,
+        None => {
+            // Idempotent: re-derive (or create) using the signer + scope.
+            let bootstrap = build_l1_client(args)?;
+            bootstrap.create_or_derive_api_key(&signer, None).await?
+        }
+    };
+    let client = build_l2_client(args, creds, &signer)?;
+    Ok(op(client).await?)
+}
+
+fn load_credentials_file(path: &str) -> anyhow::Result<Credentials> {
+    let raw = std::fs::read_to_string(path)
+        .with_context(|| format!("read --credentials file {path}"))?;
+    serde_json::from_str::<Credentials>(&raw)
+        .with_context(|| format!("decode credentials file {path}"))
+}
+
+fn parse_address(s: &str) -> anyhow::Result<pm_rs_clob_client::types::Address> {
+    use std::str::FromStr;
+    pm_rs_clob_client::types::Address::from_str(s)
+        .map_err(|e| anyhow!("parse address: {e}"))
+}
+
+async fn delete_with_nonce(
+    client: &Client,
+    signer: &PMCup26Signer,
+    _key: uuid::Uuid,
+    nonce: u32,
+) -> anyhow::Result<()> {
+    // delete_api_key uses nonce=None (=> 0); for non-zero nonce we issue a parallel L1
+    // signing call directly. Simpler: just re-use create_api_key's L1 header helper.
+    use pm_rs_clob_client::auth::build_l1_headers_with_timestamp;
+    use pm_rs_clob_client::auth::current_timestamp;
+    let _ = build_l1_headers_with_timestamp; // ensure visibility
+    let _ = current_timestamp;
+    if nonce == 0 {
+        client.delete_api_key(signer, uuid::Uuid::nil()).await?;
+    } else {
+        // For non-zero nonce we currently lack a public Client::delete_api_key_with_nonce
+        // helper; the SDK pull-through stays simple for Phase 2.1 because the chainup server
+        // identifies revoked rows by (address, scope, nonce=0) for the common case. If
+        // callers need non-zero nonces this is a known limitation tracked in PHASE2_NOTES.md.
+        anyhow::bail!(
+            "delete-key with --nonce != 0 is not yet wired: the SDK helper currently hard-codes \
+             nonce=0. Open an issue or pass --nonce 0 (and confirm with the server admin which \
+             nonce the key was bound to)."
+        );
+    }
+    Ok(())
+}
+
+// ─── printing ───────────────────────────────────────────────────────────
+
+fn print_credentials(creds: &Credentials, fmt: Format) -> anyhow::Result<()> {
+    match fmt {
+        Format::Json => output::print_json(&serde_json::json!({
+            "apiKey": creds.key.to_string(),
+            "secret": creds.secret().expose_secret(),
+            "passphrase": creds.passphrase().expose_secret(),
+        }))?,
+        Format::Table => {
+            println!("apiKey    : {}", creds.key);
+            println!("secret    : {}", creds.secret().expose_secret());
+            println!("passphrase: {}", creds.passphrase().expose_secret());
+        }
+    }
+    Ok(())
+}
+
+#[derive(Tabled)]
+struct ApiKeyRow {
+    field: &'static str,
+    value: String,
+}
+
+fn print_api_keys(info: &ApiKeyInfo, fmt: Format) -> anyhow::Result<()> {
+    match fmt {
+        Format::Json => output::print_json(&serde_json::json!({
+            "apiKeys": info.api_keys,
+            "address": info.address,
+            "proxy_wallet": info.proxy_wallet,
+        }))?,
+        Format::Table => {
+            let mut rows: Vec<ApiKeyRow> = vec![
+                ApiKeyRow {
+                    field: "address",
+                    value: info.address.clone().unwrap_or_else(|| "(none)".into()),
+                },
+                ApiKeyRow {
+                    field: "proxy_wallet",
+                    value: info.proxy_wallet.clone().unwrap_or_else(|| "(none)".into()),
+                },
+            ];
+            for (i, k) in info.api_keys.iter().enumerate() {
+                rows.push(ApiKeyRow {
+                    field: if i == 0 { "apiKeys[0]" } else { "apiKeys[n]" },
+                    value: k.clone(),
+                });
+            }
+            output::print_table(rows);
+        }
+    }
+    Ok(())
+}
+
+#[derive(Tabled)]
+struct BalanceRow {
+    field: &'static str,
+    value: String,
+}
+
+fn print_balance(resp: &BalanceAllowanceResponse, fmt: Format) -> anyhow::Result<()> {
+    match fmt {
+        Format::Json => output::print_json(&serde_json::json!({
+            "balance": resp.balance,
+            "allowances": resp.allowances,
+            "virtual_available": resp.virtual_available,
+            "locked": resp.locked,
+        }))?,
+        Format::Table => {
+            let mut rows = vec![
+                BalanceRow { field: "balance", value: resp.balance.clone() },
+            ];
+            if let Some(va) = &resp.virtual_available {
+                rows.push(BalanceRow { field: "virtual_available", value: va.clone() });
+            }
+            if let Some(lk) = &resp.locked {
+                rows.push(BalanceRow { field: "locked", value: lk.clone() });
+            }
+            for (spender, amount) in &resp.allowances {
+                rows.push(BalanceRow {
+                    field: "allowance",
+                    value: format!("{spender} -> {amount}"),
+                });
+            }
+            output::print_table(rows);
         }
     }
     Ok(())

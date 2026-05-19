@@ -19,8 +19,10 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 rust_decimal = { workspace = true }
+secrecy = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tabled = { workspace = true }
 tokio = { workspace = true }
 url = { workspace = true }
+uuid = { workspace = true }
