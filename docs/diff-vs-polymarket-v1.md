@@ -118,6 +118,35 @@ Last updated: 2026-05-19 (Phase 2.2: order construction / signing / placement / 
 | `ctf` (on-chain CTF split / merge / redeem) | Better handled by the tenant wallet or front-end, not the SDK |
 | `gamma` streaming | `pm-cup2026` `gamma-service` is REST-only; no stream. REST surface implemented in Phase 3a — see [`docs/gamma.md`](gamma.md). |
 
+### Polymarket V1 CLOB endpoints NOT in chainup `clob-service` (verified 2026-05-19)
+
+Cross-checked against `pm-cup2026/services/clob-service/internal/tradingapi/server.go`. These will not be implemented unless the backend later adds them.
+
+| Polymarket V1 endpoint | Chainup status | Notes |
+|------------------------|----------------|-------|
+| `GET /markets` (paginated CLOB market list) | absent | Market discovery happens through Gamma (`/events`, `/markets`); CLOB exposes per-token reads only. |
+| `GET /market/{condition_id}` | absent | Same — use Gamma `markets/{id}` or `markets/slug/{slug}` instead. |
+| `GET /sampling-markets` / `/simplified-markets` / `/sampling-simplified-markets` | absent | Reward-program filters; no equivalent. |
+| `GET /all-prices` | absent | No tenant-wide enumeration; callers should `POST /prices` with their token list. |
+| `GET /neg-risk` (standalone) | absent (partial) | Neg-risk flag is returned **inside** the `/book` response, not exposed as its own endpoint. |
+| `GET /geoblock` | absent | No geolocation middleware on chainup. |
+| `GET /closed-only-mode` / `GET /account-status` | absent | No account-state introspection on chainup. |
+| `GET|DELETE /notifications` | absent | No server-side notification queue. |
+| `GET /rewards` / `GET /earnings/total/{date}` / `GET /earnings/markets/{date}` / `GET /reward-percentages` / `GET /current-rewards` / `GET /rewards/markets/{condition_id}` | absent | Polymarket-affiliate maker-program endpoints; tenants on `pm-cup2026` run their own incentive logic. |
+| `POST /orders-scoring` (batch) | absent | Singular `GET /order-scoring` is supported. |
+
+### Polymarket V1 endpoints that ARE on chainup but use a different verb / shape
+
+| Polymarket V1 | Chainup | Notes |
+|---------------|---------|-------|
+| `GET /midpoints` | `POST /midpoints` (also `GET`) | Batch midpoints. SDK call: `Client::midpoints(&[token_id])` (to be added). |
+| `GET /prices` (batch) | `POST /prices` | SDK call: `Client::prices(&[(token, side)])` (to be added). |
+| `GET /spreads` (batch) | `POST /spreads` | SDK call: `Client::spreads(&[token_id])` (to be added). |
+| `GET /books` (batch) | `POST /books` | SDK call: `Client::books(&[token_id])` (to be added). |
+| `GET /last-trades-prices` | `GET|POST /last-trades-prices` | Both verbs accepted. SDK call: `Client::last_trades_prices(&[token_id])` (to be added). |
+| `GET /price-history?fidelity=...` | `GET /price-history?interval=...` | Chainup intervals: `1H | 6H | 1D | 1W | 1M | ALL`. **No `1m` minute granularity.** SDK call: `Client::price_history(token_id, interval)` (to be added). |
+| `POST /balance-allowance/update` | `GET /balance-allowance/update` | Verb difference; SDK already implements via `update_balance_allowance`. |
+
 ---
 
 ## 7. Order construction and fees
