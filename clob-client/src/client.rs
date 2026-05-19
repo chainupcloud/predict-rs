@@ -408,6 +408,30 @@ impl Client {
     pub(crate) fn http(&self) -> &HttpClient {
         &self.inner.http
     }
+
+    // ─── Phase 3b: WebSocket sub-client ─────────────────────────────────
+
+    /// Construct a [`crate::clob::ws::ClobWebSocketClient`] bound to this
+    /// client's WS endpoint and (optionally) L2 credentials.
+    ///
+    /// The returned handle covers both the `/ws/market` (public) and
+    /// `/ws/user` (auth-required) channels. Calling `subscribe_user` without
+    /// credentials yields a validation error — attach them via
+    /// [`ClientBuilder::credentials`].
+    ///
+    /// Errors with [`Error::Validation`] if no WS endpoint was configured
+    /// (pass `--ws-endpoint` or `--tenant`).
+    pub fn clob_ws(&self) -> Result<crate::clob::ws::ClobWebSocketClient> {
+        let base = self.ws_url().ok_or_else(|| {
+            Error::validation(
+                "ws endpoint not configured: pass --ws-endpoint or use --tenant",
+            )
+        })?;
+        Ok(crate::clob::ws::ClobWebSocketClient::new(
+            base.clone(),
+            self.inner.credentials.clone(),
+        ))
+    }
 }
 
 fn balance_allowance_query<'a>(
