@@ -99,14 +99,15 @@ pub struct ContractsSection {
 }
 
 impl ContractsSection {
-    /// Return the address that callers should treat as the USDC collateral token. Prefers
-    /// `usdc` if set, else `wrapped_collateral`, else `usdw`. Returns `None` if none of
-    /// those fields are set.
+    /// Return the address that callers should treat as the collateral token. Prefers
+    /// `usdc` if set, else `usdw` (chainup's wrapped USDC variant), else
+    /// `wrapped_collateral` (a NegRisk-context contract that is *not* the same as USDW on
+    /// some deployments). Returns `None` if none are set.
     pub fn collateral(&self) -> Option<&str> {
         self.usdc
             .as_deref()
-            .or(self.wrapped_collateral.as_deref())
             .or(self.usdw.as_deref())
+            .or(self.wrapped_collateral.as_deref())
     }
 
 /// The set of (name, address) pairs that a user wallet must authorise as USDC spenders
@@ -188,7 +189,7 @@ mod tests {
     }
 
     #[test]
-    fn collateral_prefers_usdc_then_wrapped_then_usdw() {
+    fn collateral_prefers_usdc_then_usdw_then_wrapped() {
         let with_usdc = ContractsSection {
             ctf_exchange: "0x1".into(),
             usdc: Some("0xUSDC".into()),
@@ -198,6 +199,7 @@ mod tests {
         };
         assert_eq!(with_usdc.collateral(), Some("0xUSDC"));
 
+        // No usdc but usdw present → usdw wins over wrapped_collateral.
         let no_usdc = ContractsSection {
             ctf_exchange: "0x1".into(),
             usdc: None,
@@ -205,7 +207,17 @@ mod tests {
             usdw: Some("0xUSDW".into()),
             ..ContractsSection::empty_for_test()
         };
-        assert_eq!(no_usdc.collateral(), Some("0xWC"));
+        assert_eq!(no_usdc.collateral(), Some("0xUSDW"));
+
+        // Only wrapped_collateral set → fallback to it.
+        let only_wc = ContractsSection {
+            ctf_exchange: "0x1".into(),
+            usdc: None,
+            usdw: None,
+            wrapped_collateral: Some("0xWC".into()),
+            ..ContractsSection::empty_for_test()
+        };
+        assert_eq!(only_wc.collateral(), Some("0xWC"));
     }
 
     impl ContractsSection {
