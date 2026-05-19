@@ -53,11 +53,13 @@ use crate::auth::{
 use crate::clob::order_builder::{Limit, Market, OrderBuilder};
 use crate::clob::types::{
     ApiKeyInfo, AssetType, BalanceAllowanceResponse, CancelMarketOrderRequest,
-    CancelOrdersResponse, FeeRateResponse, HeartbeatResponse, LastTradePriceResponse,
-    MidpointResponse, OpenOrderResponse, OrderBookSummary, OrderScoringResponse, OrdersRequest,
-    Page, PostOrderResponse, PriceResponse, ReplaceOrdersRequest, ReplaceOrdersResponse,
-    SendOrderRequest, SignedOrder, SpreadResponse, TickSizeResponse, TradeResponse,
-    TradesRequest,
+    CancelOrdersResponse, FeeRateResponse, HeartbeatResponse, LastTradePriceEntry,
+    LastTradePriceResponse, MidpointResponse, MidpointsResponse, OpenOrderResponse,
+    OrderBookSummary, OrderScoringResponse, OrdersRequest, Page, PostOrderResponse,
+    PriceHistoryInterval, PriceHistoryResponse, PriceResponse, PricesResponse,
+    ReplaceOrdersRequest, ReplaceOrdersResponse, SendOrderRequest, SignedOrder,
+    SpreadResponse, SpreadsResponse, TickSizeResponse, TokenIdItem, TokenSideItem,
+    TradeResponse, TradesRequest,
 };
 use crate::endpoints::Endpoints;
 use crate::error::{Error, Result};
@@ -204,6 +206,96 @@ impl Client {
             .await
     }
 
+    // ─── Phase 2.x: batch reads (chainup uses POST with JSON-array body) ────
+
+    /// Batch midpoints — `POST /midpoints`. Body: `[{"token_id": "..."}, ...]`. Returns a
+    /// map `token_id -> midpoint-as-string`.
+    pub async fn midpoints(&self, token_ids: &[&str]) -> Result<MidpointsResponse> {
+        let body: Vec<TokenIdItem<'_>> = token_ids.iter().map(|t| TokenIdItem { token_id: t }).collect();
+        self.post_json_unauth("/midpoints", &body).await
+    }
+
+    /// Batch prices — `POST /prices`. Body: `[{"token_id": "...", "side": "BUY|SELL"}, ...]`.
+    /// Returns a nested map `token_id -> { "BUY": price, "SELL": price }` (float numbers per
+    /// the server's response shape).
+    pub async fn prices(&self, requests: &[(String, Side)]) -> Result<PricesResponse> {
+        let body: Vec<TokenSideItem> = requests
+            .iter()
+            .map(|(t, s)| TokenSideItem {
+                token_id: t.clone(),
+                side: match s {
+                    Side::Buy => "BUY",
+                    Side::Sell => "SELL",
+                },
+            })
+            .collect();
+        self.post_json_unauth("/prices", &body).await
+    }
+
+    /// Batch spreads — `POST /spreads`. Body: `[{"token_id": "..."}, ...]`. Returns a map
+    /// `token_id -> spread-as-string`.
+    pub async fn spreads(&self, token_ids: &[&str]) -> Result<SpreadsResponse> {
+        let body: Vec<TokenIdItem<'_>> = token_ids.iter().map(|t| TokenIdItem { token_id: t }).collect();
+        self.post_json_unauth("/spreads", &body).await
+    }
+
+    /// Batch order books — `POST /books`. Body: `[{"token_id": "...", "side": "BUY|SELL"}, ...]`.
+    /// Returns one [`OrderBookSummary`] per request, preserving order. `None` slots indicate
+    /// tokens the server could not locate.
+    pub async fn books(&self, requests: &[(String, Side)]) -> Result<Vec<Option<OrderBookSummary>>> {
+        let body: Vec<TokenSideItem> = requests
+            .iter()
+            .map(|(t, s)| TokenSideItem {
+                token_id: t.clone(),
+                side: match s {
+                    Side::Buy => "BUY",
+                    Side::Sell => "SELL",
+                },
+            })
+            .collect();
+        self.post_json_unauth("/books", &body).await
+    }
+
+    /// Batch last-trade prices — `POST /last-trades-prices`. Body: `[{"token_id": "..."}, ...]`.
+    /// Server caps the batch at 500. Returns an array preserving request order.
+    pub async fn last_trades_prices(
+        &self,
+        token_ids: &[&str],
+    ) -> Result<Vec<LastTradePriceEntry>> {
+        if token_ids.len() > 500 {
+            return Err(Error::validation(format!(
+                "last_trades_prices: chainup accepts at most 500 token_ids per request (got {})",
+                token_ids.len()
+            )));
+        }
+        let body: Vec<TokenIdItem<'_>> = token_ids.iter().map(|t| TokenIdItem { token_id: t }).collect();
+        self.post_json_unauth("/last-trades-prices", &body).await
+    }
+
+    /// Price history — `GET /price-history?token_id=...&interval=...`. Chainup intervals:
+    /// `1H | 6H | 1D | 1W | 1M | ALL`. The optional `fidelity` (sample period in minutes)
+    /// and `limit` (cap on returned points) match the server defaults when set to `None`.
+    pub async fn price_history(
+        &self,
+        token_id: &str,
+        interval: PriceHistoryInterval,
+        fidelity: Option<u32>,
+        limit: Option<u32>,
+    ) -> Result<PriceHistoryResponse> {
+        let interval_str = interval.as_str();
+        let mut query: Vec<(&str, String)> = vec![
+            ("token_id", token_id.to_owned()),
+            ("interval", interval_str.to_owned()),
+        ];
+        if let Some(f) = fidelity {
+            query.push(("fidelity", f.to_string()));
+        }
+        if let Some(l) = limit {
+            query.push(("limit", l.to_string()));
+        }
+        self.get_json("/price-history", &query).await
+    }
+
     // ─── helpers ────────────────────────────────────────────────────────────
 
     fn clob(&self, path: &str) -> Result<Url> {
@@ -218,6 +310,31 @@ impl Client {
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
             return Err(Error::api(status, "GET", path, body));
+        }
+        let value: serde_json::Value = resp.json().await?;
+        let parsed = serde_json::from_value(value)
+            .map_err(|e| Error::Validation(format!("decoding {path} response: {e}")))?;
+        Ok(parsed)
+    }
+
+    /// Unauthenticated `POST <path>` with a JSON body — used by the batch-read endpoints.
+    async fn post_json_unauth<B: Serialize, R: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<R> {
+        let url = self.clob(path)?;
+        let resp = self
+            .inner
+            .http
+            .post(url)
+            .json(body)
+            .send()
+            .await?;
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(Error::api(status, "POST", path, body));
         }
         let value: serde_json::Value = resp.json().await?;
         let parsed = serde_json::from_value(value)

@@ -110,6 +110,63 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
             let resp = client.last_trade_price(&a.token_id).await?;
             output::print_scalar("last_trade_price", resp.price, fmt)?;
         }
+        Command::Midpoints(a) => {
+            let ids = expand_csv(&a.token_ids);
+            let refs: Vec<&str> = ids.iter().map(String::as_str).collect();
+            let resp = client.midpoints(&refs).await?;
+            output::print_json(&serde_json::to_value(&resp)?)?;
+        }
+        Command::Spreads(a) => {
+            let ids = expand_csv(&a.token_ids);
+            let refs: Vec<&str> = ids.iter().map(String::as_str).collect();
+            let resp = client.spreads(&refs).await?;
+            output::print_json(&serde_json::to_value(&resp)?)?;
+        }
+        Command::Prices(a) => {
+            let requests = parse_token_side_entries(&a.entries)?;
+            let resp = client.prices(&requests).await?;
+            output::print_json(&serde_json::to_value(&resp)?)?;
+        }
+        Command::Books(a) => {
+            let requests = parse_token_side_entries(&a.entries)?;
+            let resp = client.books(&requests).await?;
+            output::print_json(&serde_json::to_value(
+                resp.iter()
+                    .map(|maybe| match maybe {
+                        Some(b) => serde_json::json!({
+                            "asset_id": b.asset_id,
+                            "timestamp": b.timestamp,
+                            "hash": b.hash,
+                            "bids": b.bids.iter().map(|l| serde_json::json!({"price": l.price, "size": l.size})).collect::<Vec<_>>(),
+                            "asks": b.asks.iter().map(|l| serde_json::json!({"price": l.price, "size": l.size})).collect::<Vec<_>>(),
+                        }),
+                        None => serde_json::Value::Null,
+                    })
+                    .collect::<Vec<_>>(),
+            )?)?;
+        }
+        Command::LastTrades(a) => {
+            let ids = expand_csv(&a.token_ids);
+            let refs: Vec<&str> = ids.iter().map(String::as_str).collect();
+            let resp = client.last_trades_prices(&refs).await?;
+            output::print_json(&serde_json::to_value(
+                resp.iter()
+                    .map(|e| serde_json::json!({
+                        "token_id": e.token_id,
+                        "price": e.price,
+                        "side": e.side,
+                    }))
+                    .collect::<Vec<_>>(),
+            )?)?;
+        }
+        Command::PriceHistory(a) => {
+            let resp = client
+                .price_history(&a.token_id, a.interval.into(), a.fidelity, a.limit)
+                .await?;
+            output::print_json(&serde_json::to_value(
+                resp.history.iter().map(|p| serde_json::json!({"t": p.t, "p": p.p})).collect::<Vec<_>>(),
+            )?)?;
+        }
         Command::Gamma(_) => unreachable!("handled by early-return above"),
         Command::Ws(_) => unreachable!("handled by early-return above"),
         Command::Auth(sub) => run_auth(&args, sub, fmt).await?,
@@ -424,6 +481,45 @@ fn parse_endpoint(s: &str) -> anyhow::Result<Url> {
         s.push('/');
     }
     Ok(Url::parse(&s)?)
+}
+
+/// Accept either separate args or a single comma-separated token list. Trims whitespace and
+/// drops empty entries.
+fn expand_csv(inputs: &[String]) -> Vec<String> {
+    inputs
+        .iter()
+        .flat_map(|s| s.split(','))
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Parse `<token>:<buy|sell>` entries into `(token, Side)` pairs. Each `entries` element may
+/// itself be a comma-separated list, mirroring `expand_csv` ergonomics.
+fn parse_token_side_entries(
+    entries: &[String],
+) -> anyhow::Result<Vec<(String, pm_rs_clob_client::Side)>> {
+    let mut out = Vec::new();
+    for raw in entries.iter().flat_map(|s| s.split(',')) {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let (tok, side) = trimmed.split_once(':').ok_or_else(|| {
+            anyhow!("entry '{trimmed}' must be in '<token_id>:<buy|sell>' form")
+        })?;
+        let side = match side.trim().to_ascii_lowercase().as_str() {
+            "buy" => pm_rs_clob_client::Side::Buy,
+            "sell" => pm_rs_clob_client::Side::Sell,
+            other => return Err(anyhow!("invalid side '{other}' in entry '{trimmed}' — use 'buy' or 'sell'")),
+        };
+        out.push((tok.trim().to_owned(), side));
+    }
+    if out.is_empty() {
+        return Err(anyhow!("at least one '<token>:<side>' entry is required"));
+    }
+    Ok(out)
 }
 
 #[derive(Tabled)]

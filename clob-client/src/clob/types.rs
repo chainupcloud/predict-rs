@@ -82,6 +82,87 @@ pub struct SingleTokenRequest {
     pub token_id: String,
 }
 
+// ─── Batch-read responses (POST endpoints) ─────────────────────────────────
+
+/// Response shape for `POST /midpoints` — map `token_id -> midpoint` (Decimal, stringified
+/// by the server).
+pub type MidpointsResponse = HashMap<String, Decimal>;
+
+/// Response shape for `POST /spreads` — map `token_id -> spread` (Decimal stringified).
+pub type SpreadsResponse = HashMap<String, Decimal>;
+
+/// Response shape for `POST /prices` — nested map `token_id -> { "BUY": price, "SELL": price }`.
+/// The server returns floating-point prices (not strings) for this endpoint.
+pub type PricesResponse = HashMap<String, HashMap<String, f64>>;
+
+/// One entry in the `POST /last-trades-prices` response.
+#[derive(Clone, Debug, Deserialize)]
+pub struct LastTradePriceEntry {
+    pub token_id: String,
+    pub price: Decimal,
+    /// Last trade side as a free-form string (empty when no trades have happened yet).
+    #[serde(default)]
+    pub side: String,
+}
+
+// ─── Price history ─────────────────────────────────────────────────────────
+
+/// `GET /price-history` interval enum. Chainup-flavored values; no minute granularity.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PriceHistoryInterval {
+    H1,
+    H6,
+    D1,
+    W1,
+    M1,
+    All,
+}
+
+impl PriceHistoryInterval {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::H1 => "1H",
+            Self::H6 => "6H",
+            Self::D1 => "1D",
+            Self::W1 => "1W",
+            Self::M1 => "1M",
+            Self::All => "ALL",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct PricePoint {
+    /// Unix-seconds bucket timestamp.
+    #[serde(alias = "timestamp")]
+    pub t: i64,
+    /// Bucket price as a decimal string.
+    #[serde(alias = "price")]
+    pub p: Decimal,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct PriceHistoryResponse {
+    #[serde(default)]
+    pub history: Vec<PricePoint>,
+}
+
+// ─── Internal request items (POST body shapes) ─────────────────────────────
+
+/// Wire shape for batch requests that take only `{ token_id }`.
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct TokenIdItem<'a> {
+    pub token_id: &'a str,
+}
+
+/// Wire shape for batch requests that take `{ token_id, side }`.
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct TokenSideItem {
+    pub token_id: String,
+    /// "BUY" or "SELL" — the server uppercases anyway, but we send the canonical form.
+    pub side: &'static str,
+}
+
 // ─── Auth / balance-allowance ────────────────────────────────────────────
 
 /// `asset_type` query parameter for `/balance-allowance` and `/balance-allowance/update`.

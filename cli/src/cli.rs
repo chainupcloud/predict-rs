@@ -87,6 +87,18 @@ pub enum Command {
     FeeRate(TokenArgs),
     /// Last trade price for a token.
     LastTrade(TokenArgs),
+    /// Batch midpoints — `POST /midpoints`.
+    Midpoints(TokensArgs),
+    /// Batch prices — `POST /prices`. Tokens take the form `<id>:<side>`.
+    Prices(PricesBatchArgs),
+    /// Batch spreads — `POST /spreads`.
+    Spreads(TokensArgs),
+    /// Batch order books — `POST /books`. Tokens take the form `<id>:<side>`.
+    Books(PricesBatchArgs),
+    /// Batch last trade prices — `POST /last-trades-prices` (server cap 500).
+    LastTrades(TokensArgs),
+    /// `GET /price-history` — OHLCV-style price series for one token.
+    PriceHistory(PriceHistoryArgs),
     /// Print the resolved endpoint configuration (debugging).
     Endpoints,
     /// Gamma metadata API (events / markets / tags / series / comments / profiles / search).
@@ -260,6 +272,66 @@ impl From<AssetTypeArg> for pm_rs_clob_client::AssetType {
 #[derive(Debug, clap::Args)]
 pub struct TokenArgs {
     pub token_id: String,
+}
+
+/// Batch read endpoints (`pm midpoints / spreads / last-trades`) — accept N positional token ids.
+#[derive(Debug, clap::Args)]
+pub struct TokensArgs {
+    /// One or more token ids. Pass as separate args (`pm midpoints t1 t2 t3`) or as a single
+    /// comma-separated string (`pm midpoints t1,t2,t3`).
+    #[arg(required = true, num_args = 1..)]
+    pub token_ids: Vec<String>,
+}
+
+/// `pm prices` / `pm books` — each token must specify a side: `<id>:buy` or `<id>:sell`.
+#[derive(Debug, clap::Args)]
+pub struct PricesBatchArgs {
+    /// Tokens in `<id>:<buy|sell>` form. Repeat the flag-free positional arg for each entry.
+    #[arg(required = true, num_args = 1..)]
+    pub entries: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct PriceHistoryArgs {
+    pub token_id: String,
+    /// Interval bucket size — chainup-flavored. No `1m` minute granularity.
+    #[arg(long, value_enum, default_value = "1d")]
+    pub interval: PriceHistoryIntervalArg,
+    /// Optional override on the server's default samples-per-bucket (minutes per point).
+    #[arg(long)]
+    pub fidelity: Option<u32>,
+    /// Optional limit on the number of points returned (server cap 10000, default 2000).
+    #[arg(long)]
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum PriceHistoryIntervalArg {
+    #[value(name = "1h")]
+    H1,
+    #[value(name = "6h")]
+    H6,
+    #[value(name = "1d")]
+    D1,
+    #[value(name = "1w")]
+    W1,
+    #[value(name = "1m")]
+    M1,
+    All,
+}
+
+impl From<PriceHistoryIntervalArg> for pm_rs_clob_client::clob::types::PriceHistoryInterval {
+    fn from(v: PriceHistoryIntervalArg) -> Self {
+        use pm_rs_clob_client::clob::types::PriceHistoryInterval as I;
+        match v {
+            PriceHistoryIntervalArg::H1 => I::H1,
+            PriceHistoryIntervalArg::H6 => I::H6,
+            PriceHistoryIntervalArg::D1 => I::D1,
+            PriceHistoryIntervalArg::W1 => I::W1,
+            PriceHistoryIntervalArg::M1 => I::M1,
+            PriceHistoryIntervalArg::All => I::All,
+        }
+    }
 }
 
 #[derive(Debug, clap::Args)]

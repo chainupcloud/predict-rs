@@ -139,12 +139,12 @@ Cross-checked against `pm-cup2026/services/clob-service/internal/tradingapi/serv
 
 | Polymarket V1 | Chainup | Notes |
 |---------------|---------|-------|
-| `GET /midpoints` | `POST /midpoints` (also `GET`) | Batch midpoints. SDK call: `Client::midpoints(&[token_id])` (to be added). |
-| `GET /prices` (batch) | `POST /prices` | SDK call: `Client::prices(&[(token, side)])` (to be added). |
-| `GET /spreads` (batch) | `POST /spreads` | SDK call: `Client::spreads(&[token_id])` (to be added). |
-| `GET /books` (batch) | `POST /books` | SDK call: `Client::books(&[token_id])` (to be added). |
-| `GET /last-trades-prices` | `GET|POST /last-trades-prices` | Both verbs accepted. SDK call: `Client::last_trades_prices(&[token_id])` (to be added). |
-| `GET /price-history?fidelity=...` | `GET /price-history?interval=...` | Chainup intervals: `1H | 6H | 1D | 1W | 1M | ALL`. **No `1m` minute granularity.** SDK call: `Client::price_history(token_id, interval)` (to be added). |
+| `GET /midpoints` | `POST /midpoints` (also `GET`) | Batch midpoints. SDK call: `Client::midpoints(&[token_id])`. CLI: `pm midpoints t1 t2 ...`. |
+| `GET /prices` (batch) | `POST /prices` | SDK call: `Client::prices(&[(token, side)])`. CLI: `pm prices t1:buy t2:sell ...`. |
+| `GET /spreads` (batch) | `POST /spreads` | SDK call: `Client::spreads(&[token_id])`. CLI: `pm spreads t1 t2 ...`. |
+| `GET /books` (batch) | `POST /books` | SDK call: `Client::books(&[(token, side)])` → `Vec<Option<OrderBookSummary>>`. CLI: `pm books t1:buy t2:sell ...`. |
+| `GET /last-trades-prices` | `GET|POST /last-trades-prices` | Both verbs accepted; SDK sends POST. SDK call: `Client::last_trades_prices(&[token_id])` (capped at 500 client-side). CLI: `pm last-trades t1 t2 ...`. |
+| `GET /price-history?fidelity=...` | `GET /price-history?interval=...` | Chainup intervals: `1H | 6H | 1D | 1W | 1M | ALL`. **No `1m` minute granularity.** SDK call: `Client::price_history(token_id, interval, fidelity, limit)`. CLI: `pm price-history <token> --interval 1h`. |
 | `POST /balance-allowance/update` | `GET /balance-allowance/update` | Verb difference; SDK already implements via `update_balance_allowance`. |
 
 ---
