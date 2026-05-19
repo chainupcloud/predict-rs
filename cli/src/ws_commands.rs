@@ -160,10 +160,8 @@ async fn build_l2_client(args: &Cli) -> anyhow::Result<Client> {
     Ok(b.credentials(creds).signer_address(signer.address()).build()?)
 }
 
-fn ctrl_c_signal() -> impl std::future::Future<Output = ()> {
-    async {
-        let _ = tokio::signal::ctrl_c().await;
-    }
+async fn ctrl_c_signal() {
+    let _ = tokio::signal::ctrl_c().await;
 }
 
 fn print_market_event(ev: &MarketEvent, fmt: Format) -> anyhow::Result<()> {
@@ -189,8 +187,8 @@ fn print_watch_line(asset_id: &str, ev: &MarketEvent, json_mode: bool) -> anyhow
     }
     match ev {
         MarketEvent::Book(b) if b.asset_id == asset_id => {
-            let best_bid = b.bids.iter().rev().next().map_or("-".into(), |l| l.price.clone());
-            let best_ask = b.asks.iter().next().map_or("-".into(), |l| l.price.clone());
+            let best_bid = b.bids.iter().next_back().map_or("-".into(), |l| l.price.clone());
+            let best_ask = b.asks.first().map_or("-".into(), |l| l.price.clone());
             println!("[BOOK ] asset={} bid={} ask={}", asset_id, best_bid, best_ask);
         }
         MarketEvent::PriceChange(p) => {

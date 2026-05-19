@@ -84,14 +84,16 @@ async fn spin_server(push_frames: Vec<String>) -> (Url, SharedLog) {
     });
 
     let url = Url::parse(&format!("ws://{local}/")).unwrap();
-    let _ = SocketAddr::from(local);
+    let _: SocketAddr = local;
     (url, log)
 }
 
 fn build_ws_client(base: Url, creds: Option<Credentials>) -> ClobWebSocketClient {
-    let mut cfg = pm_rs_clob_client::ws::WsConfig::default();
-    cfg.ping_interval = Duration::ZERO; // disable heartbeat for deterministic tests
-    cfg.emit_reconnecting = false;
+    let cfg = pm_rs_clob_client::ws::WsConfig {
+        ping_interval: Duration::ZERO, // disable heartbeat for deterministic tests
+        emit_reconnecting: false,
+        ..Default::default()
+    };
     ClobWebSocketClient::new(base, creds).with_config(cfg)
 }
 

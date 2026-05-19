@@ -373,10 +373,10 @@ impl Client {
     ) -> Result<reqwest::Response> {
         let url = self.clob(path)?;
         let mut req: RequestBuilder = self.inner.http.request(method, url).headers(headers);
-        if let Some(q) = query {
-            if !q.is_empty() {
-                req = req.query(q);
-            }
+        if let Some(q) = query
+            && !q.is_empty()
+        {
+            req = req.query(q);
         }
         if let Some(b) = body {
             req = req.header(
@@ -881,10 +881,10 @@ impl ClientBuilder {
     /// Set the Gamma REST URL (Phase 3).
     #[must_use]
     pub fn gamma_endpoint(mut self, gamma: impl AsRef<str>) -> Self {
-        if let Some(ref mut ep) = self.endpoints {
-            if let Ok(parsed) = parse_url(gamma.as_ref()) {
-                ep.gamma = Some(parsed);
-            }
+        if let Some(ref mut ep) = self.endpoints
+            && let Ok(parsed) = parse_url(gamma.as_ref())
+        {
+            ep.gamma = Some(parsed);
         }
         self
     }
@@ -892,10 +892,10 @@ impl ClientBuilder {
     /// Set the WebSocket URL (Phase 3).
     #[must_use]
     pub fn ws_endpoint(mut self, ws: impl AsRef<str>) -> Self {
-        if let Some(ref mut ep) = self.endpoints {
-            if let Ok(parsed) = parse_url(ws.as_ref()) {
-                ep.ws = Some(parsed);
-            }
+        if let Some(ref mut ep) = self.endpoints
+            && let Ok(parsed) = parse_url(ws.as_ref())
+        {
+            ep.ws = Some(parsed);
         }
         self
     }

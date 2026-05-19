@@ -288,7 +288,7 @@ where
             let sink: &mut futures_util::stream::SplitSink<
                 tokio_tungstenite::WebSocketStream<S>,
                 Message,
-            > = &mut *guard;
+            > = &mut guard;
             if sink.send(Message::Text("PING".into())).await.is_err() {
                 return;
             }

@@ -205,10 +205,10 @@ pub(super) fn spawn_market_pump(
                         level: state.level,
                         custom_feature_enabled: state.custom_feature_enabled,
                     };
-                    if let Ok(payload) = serde_json::to_string(&req) {
-                        if cmd_tx.send(WsCommand::Send(payload)).await.is_err() {
-                            return;
-                        }
+                    if let Ok(payload) = serde_json::to_string(&req)
+                        && cmd_tx.send(WsCommand::Send(payload)).await.is_err()
+                    {
+                        return;
                     }
                 }
                 WsEvent::Message(text) => match serde_json::from_str::<MarketEvent>(&text) {
@@ -252,20 +252,20 @@ pub(super) fn spawn_user_pump(
                         state.auth.passphrase.clone(),
                         markets,
                     );
-                    if let Ok(payload) = serde_json::to_string(&req) {
-                        if cmd_tx.send(WsCommand::Send(payload)).await.is_err() {
-                            return;
-                        }
+                    if let Ok(payload) = serde_json::to_string(&req)
+                        && cmd_tx.send(WsCommand::Send(payload)).await.is_err()
+                    {
+                        return;
                     }
                 }
                 WsEvent::Message(text) => {
-                    if let Ok(map) = serde_json::from_str::<serde_json::Value>(&text) {
-                        if let Some(err) = map.get("error").and_then(|v| v.as_str()) {
-                            let _ = out_tx
-                                .send(Err(WsError::UserAuthRejected(err.into())))
-                                .await;
-                            return;
-                        }
+                    if let Ok(map) = serde_json::from_str::<serde_json::Value>(&text)
+                        && let Some(err) = map.get("error").and_then(|v| v.as_str())
+                    {
+                        let _ = out_tx
+                            .send(Err(WsError::UserAuthRejected(err.into())))
+                            .await;
+                        return;
                     }
                     match serde_json::from_str::<UserEvent>(&text) {
                         Ok(parsed) => {
@@ -298,7 +298,7 @@ fn truncate(s: &str, n: usize) -> String {
         s.to_owned()
     } else {
         let mut out = s[..n].to_owned();
-        out.push_str("…");
+        out.push('…');
         out
     }
 }

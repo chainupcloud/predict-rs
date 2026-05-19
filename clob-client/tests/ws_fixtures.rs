@@ -71,7 +71,7 @@ fn order_status_enum_covers_all_documented_values() {
     for (raw, expected) in values {
         let v: OrderStatus = serde_json::from_value(serde_json::Value::String(raw.into())).unwrap();
         assert_eq!(v, expected);
-        let back = serde_json::to_value(&v).unwrap();
+        let back = serde_json::to_value(v).unwrap();
         assert_eq!(back, serde_json::Value::String(raw.into()));
     }
 }
@@ -117,5 +117,5 @@ fn order_side_round_trip() {
     let sell: OrderSide = serde_json::from_value(serde_json::Value::String("SELL".into())).unwrap();
     assert_eq!(buy, OrderSide::Buy);
     assert_eq!(sell, OrderSide::Sell);
-    assert_eq!(serde_json::to_value(&buy).unwrap(), serde_json::Value::String("BUY".into()));
+    assert_eq!(serde_json::to_value(buy).unwrap(), serde_json::Value::String("BUY".into()));
 }
