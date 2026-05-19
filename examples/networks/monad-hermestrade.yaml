@@ -8,11 +8,13 @@
 
 network:
   name: monad
-  # Set the actual chain id at use time. Monad mainnet vs testnet IDs differ;
-  # confirm with the relayer / on-chain RPC before signing orders.
-  chain_id: ~        # TODO: fill in once confirmed
+  # Monad mainnet, confirmed via cryptorobsu 2026-05-19.
+  chain_id: 143      # 0x8f
   gas_token: MON
-  rpc_url: ~         # TODO: tenant-supplied RPC
+  rpc_url: https://rpc.monad.xyz
+  # Alternates (caller may swap in or load-balance):
+  #   - https://rpc-mainnet.monadinfra.com
+  #   - https://monad-mainnet.drpc.org
 
 tenant:
   name: hermestrade
