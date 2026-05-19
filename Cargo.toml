@@ -53,6 +53,9 @@ rand = "0.9"
 url = "2"
 tracing = "0.1"
 
+# test
+httpmock = "0.7"
+
 # cli
 clap = { version = "4", features = ["derive", "env"] }
 tabled = "0.17"
