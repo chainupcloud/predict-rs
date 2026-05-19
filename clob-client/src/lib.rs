@@ -23,12 +23,19 @@ pub mod ws;
 
 pub use auth::Credentials;
 pub use client::{Client, ClientBuilder};
-pub use clob::types::{ApiKeyInfo, AssetType, BalanceAllowanceResponse};
+pub use clob::order_builder::{Limit, Market, OrderBuilder};
+pub use clob::types::{
+    ApiKeyInfo, AssetType, BalanceAllowanceResponse, CancelMarketOrderRequest,
+    CancelOrdersResponse, HeartbeatResponse, OpenOrderResponse, OrderScoringResponse, OrderType,
+    OrdersRequest, Page, PostOrderResponse, ReplaceOrdersRequest, ReplaceOrdersResponse,
+    SendOrderRequest, SignableOrder, SignedOrder, TradeResponse, TradesRequest,
+};
 pub use clob::ws::{ClobWebSocketClient, MarketStream, MarketSubscribeOpts, UserStream};
 pub use endpoints::Endpoints;
 pub use error::{Error, Result};
 pub use gamma::GammaClient;
 pub use signer::PMCup26Signer;
+pub use types::{Side, SignatureType};
 
 /// Default `pm-cup2026` dev endpoint.
 pub const DEFAULT_ENDPOINT: &str = "https://clob-api.predict.prax1s.xyz";

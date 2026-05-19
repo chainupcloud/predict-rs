@@ -50,14 +50,20 @@ use uuid::Uuid;
 use crate::auth::{
     Credentials, build_l1_headers, build_l2_headers, current_timestamp,
 };
+use crate::clob::order_builder::{Limit, Market, OrderBuilder};
 use crate::clob::types::{
-    ApiKeyInfo, AssetType, BalanceAllowanceResponse, FeeRateResponse, LastTradePriceResponse,
-    MidpointResponse, OrderBookSummary, PriceResponse, SpreadResponse, TickSizeResponse,
+    ApiKeyInfo, AssetType, BalanceAllowanceResponse, CancelMarketOrderRequest,
+    CancelOrdersResponse, FeeRateResponse, HeartbeatResponse, LastTradePriceResponse,
+    MidpointResponse, OpenOrderResponse, OrderBookSummary, OrderScoringResponse, OrdersRequest,
+    Page, PostOrderResponse, PriceResponse, ReplaceOrdersRequest, ReplaceOrdersResponse,
+    SendOrderRequest, SignedOrder, SpreadResponse, TickSizeResponse, TradeResponse,
+    TradesRequest,
 };
 use crate::endpoints::Endpoints;
 use crate::error::{Error, Result};
 use crate::signer::PMCup26Signer;
 use crate::types::Side;
+use std::collections::HashMap;
 
 const DEFAULT_USER_AGENT: &str = concat!("pm-rs-clob-client/", env!("CARGO_PKG_VERSION"));
 
@@ -380,6 +386,350 @@ impl Client {
             req = req.body(b);
         }
         Ok(req.send().await?)
+    }
+
+    // ─── Phase 2.2: order / trade endpoints ─────────────────────────────
+
+    /// Begin building a limit order. Returns an [`OrderBuilder`] in the [`Limit`] state.
+    ///
+    /// Pre-populating `feeRateBps` + `minimum_tick_size` from `GET /fee-rate` and
+    /// `GET /tick-size` is **not** done here to keep this synchronous; callers that want
+    /// auto-discovery should:
+    ///
+    /// ```ignore
+    /// let fee = client.fee_rate(token).await?;
+    /// let tick = client.tick_size(token).await?;
+    /// let signable = client
+    ///     .limit_order()
+    ///     .token_id(token.parse::<U256>().unwrap())
+    ///     .fee_rate_bps(fee.fee_rate_bps)
+    ///     .minimum_tick_size(tick.minimum_tick_size)
+    ///     .price(price)
+    ///     .size(size)
+    ///     .side(Side::Buy)
+    ///     .maker(safe_address)
+    ///     .build_and_sign(&signer)?;
+    /// ```
+    #[must_use]
+    pub fn limit_order(&self) -> OrderBuilder<Limit> {
+        OrderBuilder::<Limit>::limit()
+    }
+
+    /// Begin building a market order (FAK by default). See [`Self::limit_order`].
+    #[must_use]
+    pub fn market_order(&self) -> OrderBuilder<Market> {
+        OrderBuilder::<Market>::market()
+    }
+
+    /// `POST /order` — submit a single signed order. L2-authenticated.
+    pub async fn post_order(
+        &self,
+        signed: SignedOrder,
+        order_type: crate::clob::types::OrderType,
+        post_only: bool,
+        owner: impl Into<String>,
+    ) -> Result<PostOrderResponse> {
+        let req = SendOrderRequest {
+            order: signed,
+            owner: owner.into(),
+            order_type,
+            post_only,
+            defer_exec: false,
+        };
+        let body = serde_json::to_string(&req)?;
+        let resp = self
+            .request_authenticated(Method::POST, "/order", &[], Some(&body))
+            .await?;
+        let body = check_ok(resp, "POST", "/order").await?;
+        serde_json::from_str(&body)
+            .map_err(|e| Error::Validation(format!("decoding /order response: {e}")))
+    }
+
+    /// `POST /orders` — batch up to 15 signed orders. L2-authenticated. Returns one
+    /// [`PostOrderResponse`] per submitted order, preserving order.
+    pub async fn post_orders(
+        &self,
+        signed: Vec<SignedOrder>,
+        order_type: crate::clob::types::OrderType,
+        post_only: bool,
+        owner: impl Into<String> + Clone,
+    ) -> Result<Vec<PostOrderResponse>> {
+        if signed.is_empty() {
+            return Ok(Vec::new());
+        }
+        if signed.len() > 15 {
+            return Err(Error::validation(format!(
+                "post_orders: chainup accepts at most 15 orders per batch (got {})",
+                signed.len()
+            )));
+        }
+        let owner = owner.into();
+        let reqs: Vec<SendOrderRequest> = signed
+            .into_iter()
+            .map(|o| SendOrderRequest {
+                order: o,
+                owner: owner.clone(),
+                order_type,
+                post_only,
+                defer_exec: false,
+            })
+            .collect();
+        let body = serde_json::to_string(&reqs)?;
+        let resp = self
+            .request_authenticated(Method::POST, "/orders", &[], Some(&body))
+            .await?;
+        let body = check_ok(resp, "POST", "/orders").await?;
+        serde_json::from_str(&body)
+            .map_err(|e| Error::Validation(format!("decoding /orders response: {e}")))
+    }
+
+    /// `POST /orders/replace` — atomic cancel + place. L2-authenticated.
+    pub async fn replace_order(
+        &self,
+        req: ReplaceOrdersRequest,
+    ) -> Result<ReplaceOrdersResponse> {
+        let body = serde_json::to_string(&req)?;
+        let resp = self
+            .request_authenticated(Method::POST, "/orders/replace", &[], Some(&body))
+            .await?;
+        let body = check_ok(resp, "POST", "/orders/replace").await?;
+        serde_json::from_str(&body)
+            .map_err(|e| Error::Validation(format!("decoding /orders/replace response: {e}")))
+    }
+
+    /// `DELETE /order` — cancel a single order by id. L2-authenticated.
+    pub async fn cancel_order(&self, order_id: &str) -> Result<CancelOrdersResponse> {
+        let body = serde_json::to_string(&serde_json::json!({ "orderID": order_id }))?;
+        let resp = self
+            .request_authenticated(Method::DELETE, "/order", &[], Some(&body))
+            .await?;
+        let body = check_ok(resp, "DELETE", "/order").await?;
+        serde_json::from_str(&body)
+            .map_err(|e| Error::Validation(format!("decoding DELETE /order response: {e}")))
+    }
+
+    /// `DELETE /orders` — batch cancel by id (max 3000). Sends the wire body as a bare
+    /// JSON array, matching `services/clob-service/internal/tradingapi/handlers.CancelOrders`.
+    /// L2-authenticated.
+    pub async fn cancel_orders(&self, order_ids: &[String]) -> Result<CancelOrdersResponse> {
+        if order_ids.len() > 3000 {
+            return Err(Error::validation(format!(
+                "cancel_orders: chainup accepts at most 3000 ids per batch (got {})",
+                order_ids.len()
+            )));
+        }
+        let body = serde_json::to_string(order_ids)?;
+        let resp = self
+            .request_authenticated(Method::DELETE, "/orders", &[], Some(&body))
+            .await?;
+        let body = check_ok(resp, "DELETE", "/orders").await?;
+        serde_json::from_str(&body)
+            .map_err(|e| Error::Validation(format!("decoding DELETE /orders response: {e}")))
+    }
+
+    /// `DELETE /cancel-all` — cancel every open order for the API-key owner.
+    pub async fn cancel_all(&self) -> Result<CancelOrdersResponse> {
+        let resp = self
+            .request_authenticated(Method::DELETE, "/cancel-all", &[], None)
+            .await?;
+        let body = check_ok(resp, "DELETE", "/cancel-all").await?;
+        serde_json::from_str(&body)
+            .map_err(|e| Error::Validation(format!("decoding /cancel-all response: {e}")))
+    }
+
+    /// `DELETE /cancel-market-orders` — cancel by condition id and/or token id. The server
+    /// requires at least one of the two to be set.
+    pub async fn cancel_market_orders(
+        &self,
+        request: CancelMarketOrderRequest,
+    ) -> Result<CancelOrdersResponse> {
+        if request.market.is_none() && request.asset_id.is_none() {
+            return Err(Error::validation(
+                "cancel_market_orders: at least one of `market` (condition id) or `asset_id` (token id) is required",
+            ));
+        }
+        let body = serde_json::to_string(&request)?;
+        let resp = self
+            .request_authenticated(Method::DELETE, "/cancel-market-orders", &[], Some(&body))
+            .await?;
+        let body = check_ok(resp, "DELETE", "/cancel-market-orders").await?;
+        serde_json::from_str(&body).map_err(|e| {
+            Error::Validation(format!("decoding /cancel-market-orders response: {e}"))
+        })
+    }
+
+    /// `GET /orders` — paginated open-order query. Pass `cursor` from a previous
+    /// [`Page::next_cursor`] for forward pagination; pass `None` for the first page.
+    pub async fn open_orders(
+        &self,
+        request: &OrdersRequest,
+        cursor: Option<&str>,
+    ) -> Result<Page<OpenOrderResponse>> {
+        let mut query: Vec<(&str, String)> = Vec::with_capacity(6);
+        if let Some(v) = &request.id {
+            query.push(("id", v.clone()));
+        }
+        if let Some(v) = &request.market {
+            query.push(("market", v.clone()));
+        }
+        if let Some(v) = &request.asset_id {
+            query.push(("asset_id", v.clone()));
+        }
+        if let Some(v) = &request.status {
+            query.push(("status", v.clone()));
+        }
+        if let Some(c) = cursor {
+            query.push(("next_cursor", c.to_owned()));
+        }
+        let q_owned: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        let resp = self
+            .request_authenticated(Method::GET, "/orders", &q_owned, None)
+            .await?;
+        let body = check_ok(resp, "GET", "/orders").await?;
+        serde_json::from_str::<Page<OpenOrderResponse>>(&body)
+            .map_err(|e| Error::Validation(format!("decoding /orders response: {e}")))
+    }
+
+    /// `GET /order/{orderID}` — fetch a single order. Returns `Error::Api` with 404 when
+    /// not found.
+    pub async fn open_order(&self, order_id: &str) -> Result<OpenOrderResponse> {
+        let path = format!("/order/{order_id}");
+        let resp = self
+            .request_authenticated(Method::GET, &path, &[], None)
+            .await?;
+        let body = check_ok(resp, "GET", &path).await?;
+        serde_json::from_str(&body)
+            .map_err(|e| Error::Validation(format!("decoding {path} response: {e}")))
+    }
+
+    /// `GET /trades` — paginated trade query. The server's `maker_address` parameter is
+    /// **required**; if the caller leaves [`TradesRequest::maker_address`] unset the SDK
+    /// fills it with the configured L2 signer address.
+    pub async fn trades(
+        &self,
+        request: &TradesRequest,
+        cursor: Option<&str>,
+    ) -> Result<Page<TradeResponse>> {
+        let maker_addr = match request.maker_address.clone() {
+            Some(a) => a,
+            None => {
+                let addr = self.require_signer_address()?;
+                format!("{addr:#x}")
+            }
+        };
+        let from_id_str;
+        let limit_str;
+        let before_str;
+        let after_str;
+        let mut query: Vec<(&str, &str)> = Vec::with_capacity(8);
+        query.push(("maker_address", maker_addr.as_str()));
+        if let Some(v) = &request.id {
+            query.push(("id", v));
+        }
+        if let Some(v) = &request.market {
+            query.push(("market", v));
+        }
+        if let Some(v) = &request.asset_id {
+            query.push(("asset_id", v));
+        }
+        if let Some(v) = &request.before {
+            before_str = v.to_string();
+            query.push(("before", &before_str));
+        }
+        if let Some(v) = &request.after {
+            after_str = v.to_string();
+            query.push(("after", &after_str));
+        }
+        if let Some(v) = &request.from_id {
+            from_id_str = v.to_string();
+            query.push(("from_id", &from_id_str));
+        }
+        if let Some(v) = &request.limit {
+            limit_str = v.to_string();
+            query.push(("limit", &limit_str));
+        }
+        if let Some(c) = cursor {
+            query.push(("next_cursor", c));
+        }
+        let resp = self
+            .request_authenticated(Method::GET, "/trades", &query, None)
+            .await?;
+        let body = check_ok(resp, "GET", "/trades").await?;
+        serde_json::from_str(&body)
+            .map_err(|e| Error::Validation(format!("decoding /trades response: {e}")))
+    }
+
+    /// `GET /builder/trades` — Builder-program variant of `/trades` with a 300-item limit.
+    /// Takes the same [`TradesRequest`] filters.
+    pub async fn builder_trades(
+        &self,
+        request: &TradesRequest,
+        cursor: Option<&str>,
+    ) -> Result<Page<TradeResponse>> {
+        let from_id_str;
+        let limit_str;
+        let mut query: Vec<(&str, &str)> = Vec::with_capacity(6);
+        if let Some(v) = &request.id {
+            query.push(("id", v));
+        }
+        if let Some(v) = &request.market {
+            query.push(("market", v));
+        }
+        if let Some(v) = &request.asset_id {
+            query.push(("asset_id", v));
+        }
+        if let Some(v) = &request.from_id {
+            from_id_str = v.to_string();
+            query.push(("from_id", &from_id_str));
+        }
+        if let Some(v) = &request.limit {
+            limit_str = v.to_string();
+            query.push(("limit", &limit_str));
+        }
+        if let Some(c) = cursor {
+            query.push(("next_cursor", c));
+        }
+        let resp = self
+            .request_authenticated(Method::GET, "/builder/trades", &query, None)
+            .await?;
+        let body = check_ok(resp, "GET", "/builder/trades").await?;
+        serde_json::from_str(&body)
+            .map_err(|e| Error::Validation(format!("decoding /builder/trades response: {e}")))
+    }
+
+    /// `GET /order-scoring` — check whether an order is eligible for maker-program rewards.
+    pub async fn order_scoring(&self, order_id: &str) -> Result<OrderScoringResponse> {
+        let resp = self
+            .request_authenticated(Method::GET, "/order-scoring", &[("order_id", order_id)], None)
+            .await?;
+        let body = check_ok(resp, "GET", "/order-scoring").await?;
+        serde_json::from_str(&body)
+            .map_err(|e| Error::Validation(format!("decoding /order-scoring response: {e}")))
+    }
+
+    /// Convenience wrapper that calls `/order-scoring` for each id and returns a map of
+    /// `orderID -> scoring`. The server has no batch endpoint; each call is a separate
+    /// HMAC-signed request.
+    pub async fn orders_scoring(&self, ids: &[String]) -> Result<HashMap<String, bool>> {
+        let mut out = HashMap::with_capacity(ids.len());
+        for id in ids {
+            let resp = self.order_scoring(id).await?;
+            out.insert(id.clone(), resp.scoring);
+        }
+        Ok(out)
+    }
+
+    /// `POST /heartbeats` — keep maker-program orders alive (10-s timeout server-side).
+    /// Send every 5 s.
+    pub async fn heartbeat(&self) -> Result<HeartbeatResponse> {
+        // Optional `heartbeat_id`; server accepts an empty JSON object too.
+        let body = "{}";
+        let resp = self
+            .request_authenticated(Method::POST, "/heartbeats", &[], Some(body))
+            .await?;
+        let body = check_ok(resp, "POST", "/heartbeats").await?;
+        serde_json::from_str(&body)
+            .map_err(|e| Error::Validation(format!("decoding /heartbeats response: {e}")))
     }
 
     // ─── credentials / signer plumbing ──────────────────────────────────

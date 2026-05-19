@@ -24,6 +24,7 @@ futures = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
 hmac = { workspace = true }
+rand = { workspace = true }
 reqwest = { workspace = true }
 rust_decimal = { workspace = true }
 secrecy = { workspace = true }
@@ -45,4 +46,5 @@ tokio = { workspace = true }
 serde_json = { workspace = true }
 hex = { workspace = true }
 httpmock = { workspace = true }
+rust_decimal_macros = { workspace = true }
 wiremock = "0.6"
