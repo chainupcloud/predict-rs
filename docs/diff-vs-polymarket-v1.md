@@ -2,7 +2,7 @@
 
 > **Scope:** `pm-rs` mirrors Polymarket V1 (`rs-clob-client` v0.4 + `polymarket-cli` v0.1.4) functionally. This document lists **only the differences**; anything not listed here is unchanged or carried over directly.
 
-Last updated: 2026-05-19 (Phase 2.1: L1/L2 auth + balance-allowance).
+Last updated: 2026-05-19 (Phase 2.2: order construction / signing / placement / cancellation / trade query).
 
 ---
 
@@ -100,7 +100,11 @@ Last updated: 2026-05-19 (Phase 2.1: L1/L2 auth + balance-allowance).
 | `GET /price` | `{"price": ...}` | Same |
 | `GET /balance-allowance` | EOA balance | Automatic **Safe-address derivation from EOA + scopeId**; returns Safe balance |
 | `GET /auth/api-keys` | Lists API keys for the address | Also returns `proxy_wallet` (Safe address) |
-| `GET /builder/trades` | Standard Polymarket Builder flow | Same endpoint; Phase 2 implements only the L2 part (the V1 `BuilderConfig::remote` remote signer is out of scope) |
+| `GET /builder/trades` | Standard Polymarket Builder flow | `Client::builder_trades` exposes the L2-auth query path; the V1 `BuilderConfig::remote` remote-signer for `POST` paths is NOT implemented (Phase 4+). |
+| `POST /order` / `POST /orders` / `POST /orders/replace` | V1: built into `Client::post_order` / `post_orders` / `replace_order`. | Same surface (`Client::post_order` / `post_orders` / `replace_order`) — JSON shape matches `handlers.orderJSON` (camelCase `tokenID` / `makerAmount` / `feeRateBps` / `signatureType` / `scopeId`; `signatureType` as numeric **string**; salt as decimal string). |
+| `DELETE /order` / `DELETE /orders` / `DELETE /cancel-all` / `DELETE /cancel-market-orders` | V1: `cancel_order` / `cancel_orders` / `cancel_all` / `cancel_market_orders`. | Same — chainup `DELETE /orders` accepts both `["id"...]` (preferred) and `{"orderIDs": [...]}` per openapi; SDK sends the bare array form. |
+| `GET /orders` / `GET /order/{id}` | V1: paginated `next_cursor` | Same envelope shape (`{limit, count, next_cursor, data}`); `next_cursor == "LTE="` signals end. chainup-specific `lazy` field surfaced in `OpenOrderResponse`. |
+| `GET /trades` | V1: `before`/`after` filters | chainup adds `from_id` (snowflake ASC cursor) + `limit ∈ [1, 1000]`; SDK supports the full filter matrix and auto-fills `maker_address` from the configured L2 signer. |
 | `POST /self-trade` | — | **chainup-only** (internal port `:8083`, used for market-maker price-history backfill / mirroring) |
 
 ### V1 endpoints `pm-rs` will not implement
@@ -120,12 +124,15 @@ Last updated: 2026-05-19 (Phase 2.1: L1/L2 auth + balance-allowance).
 
 | Dimension | Polymarket V1 | pm-rs |
 |-----------|---------------|-------|
-| Price precision | tick size 0.01 / 0.001 / 0.0001 | Same (`pm-cup2026` inherits the same rules) |
-| Token / USDC precision | 6 decimals | Same |
+| Price precision | tick size 0.01 / 0.001 / 0.0001 | Same (`pm-cup2026` inherits the same rules) — enforced by `OrderBuilder::minimum_tick_size` |
+| Token / USDC precision | 6 decimals | Same — `to_base_units` uses `Truncate(6).Shift(6)` matching `pm-sdk-go::toBaseUnits` |
 | Order-field units | `size` / `amount` / `fee` human-readable, `makerAmount` / `takerAmount` in chain minimum units | Same |
 | Fee-rate unit | bps (basis points); order field `feeRateBps` | Same |
 | Fee algorithm | `fee = bps × amount` (flat) | **On-chain `min(p, 1−p)` adjusted formula** (see [`pm-cup2026/services/clob-service/docs/fee-algorithm.md`](../../pm-cup2026/services/clob-service/docs/fee-algorithm.md)) |
 | Fee split | Single platform fee | **Split into `PLATFORM_FEE + TENANT_FEE`**, 3 on-chain transactions per side per fill |
+| Salt generation | `(seconds × rand_f64) & (2^53 - 1)` | `time.Now().UnixNano() & (2^53 - 1)` (matches `pm-sdk-go::time.Now().UnixNano()`); pinned via `OrderBuilder::salt(...)` for reproducible signatures |
+| `v` byte normalisation | n/a (V1 path emits {27,28} natively) | `+27` normalisation applied client-side (`normalize_ecdsa_v`); on-chain `ECDSA.recover` requires `{27, 28}`, server-side L2 verifier accepts both |
+| `OrderBuilder` builder-codes / metadata / defer_exec | n/a in V1 | chainup `deferExec` exists in the wire schema but the SDK always sends `false` (Phase 2.2 scope); builder-program codes / metadata are V2-only and explicitly NOT carried |
 
 ---
 
@@ -162,8 +169,8 @@ Last updated: 2026-05-19 (Phase 2.1: L1/L2 auth + balance-allowance).
 
 V2 ideas worth borrowing **selectively** (not adopted wholesale):
 
-- `build_sign_and_post()` one-shot order placement — may land in Phase 2 (without the V2 version-mismatch retry; not relevant here).
-- `user_usdc_balance()` market-buy balance auto-adjustment — reassess in Phase 2.
+- `build_sign_and_post()` one-shot order placement — partial: `OrderBuilder::build_and_sign` + `Client::post_order` are separate calls (caller chooses to compose them).
+- `user_usdc_balance()` market-buy balance auto-adjustment — reassess in Phase 3+.
 - The public `clob::utilities` module — Phase 3 will ship an equivalent with chainup's own fee formulas.
 
 ---

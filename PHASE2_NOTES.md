@@ -2,6 +2,11 @@
 
 Branch: `feat/phase2-auth`. Three commits, all tests passing per commit (Phase 1 golden vectors untouched, no breaking SDK API changes).
 
+> **Status:** superseded by Phase 2.2 (`feat/phase2-orders`) — see
+> [`PHASE2_ORDERS_NOTES.md`](./PHASE2_ORDERS_NOTES.md). The L1/L2 + balance-allowance
+> surface documented below is unchanged on `dev`; Phase 2.2 adds the order / trade
+> endpoints on top.
+
 ## Endpoints implemented
 
 | Method | Path | Auth | Client method | CLI subcommand |
