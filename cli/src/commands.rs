@@ -102,6 +102,9 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
         Command::Ws(_) => unreachable!("handled by early-return above"),
         Command::Auth(sub) => run_auth(&args, sub, fmt).await?,
         Command::Balance(a) => run_balance(&args, a, fmt).await?,
+        Command::Order(sub) => crate::order_commands::run(&args, sub, fmt).await?,
+        Command::Trade(a) => crate::order_commands::run_trade(&args, a, fmt).await?,
+        Command::Heartbeat => crate::order_commands::run_heartbeat(&args, fmt).await?,
     }
     Ok(())
 }
@@ -160,7 +163,7 @@ async fn run_balance(args: &Cli, a: &BalanceArgs, fmt: Format) -> anyhow::Result
 
 // ─── helpers: signer / credentials / client builders ────────────────────
 
-fn signer_from_args(args: &Cli) -> anyhow::Result<PMCup26Signer> {
+pub(crate) fn signer_from_args(args: &Cli) -> anyhow::Result<PMCup26Signer> {
     let pk = args.private_key.as_deref().ok_or_else(|| {
         anyhow!(
             "private key required for L1 auth: pass --private-key or set PM_PRIVATE_KEY"
@@ -201,7 +204,7 @@ fn build_l2_client(args: &Cli, creds: Credentials, signer: &PMCup26Signer) -> an
     Ok(b.credentials(creds).signer_address(signer.address()).build()?)
 }
 
-async fn with_l2_credentials<F, Fut, T>(args: &Cli, op: F) -> anyhow::Result<T>
+pub(crate) async fn with_l2_credentials<F, Fut, T>(args: &Cli, op: F) -> anyhow::Result<T>
 where
     F: FnOnce(Client) -> Fut,
     Fut: std::future::Future<Output = pm_rs_clob_client::Result<T>>,
@@ -227,7 +230,7 @@ fn load_credentials_file(path: &str) -> anyhow::Result<Credentials> {
         .with_context(|| format!("decode credentials file {path}"))
 }
 
-fn parse_address(s: &str) -> anyhow::Result<pm_rs_clob_client::types::Address> {
+pub(crate) fn parse_address(s: &str) -> anyhow::Result<pm_rs_clob_client::types::Address> {
     use std::str::FromStr;
     pm_rs_clob_client::types::Address::from_str(s)
         .map_err(|e| anyhow!("parse address: {e}"))

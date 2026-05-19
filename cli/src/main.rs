@@ -1,6 +1,7 @@
 mod cli;
 mod commands;
 mod gamma_commands;
+mod order_commands;
 mod output;
 mod ws_commands;
 

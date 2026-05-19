@@ -91,6 +91,13 @@ pub enum Command {
     Balance(BalanceArgs),
     /// WebSocket subscriptions (`/ws/market` public; `/ws/user` auth-required).
     Ws(WsArgs),
+    /// Phase 2.2: order lifecycle (create / cancel / list / replace / scoring).
+    #[command(subcommand)]
+    Order(crate::order_commands::OrderCommand),
+    /// `GET /trades` — paginated trade history (L2-auth).
+    Trade(crate::order_commands::TradeArgs),
+    /// `POST /heartbeats` — maker-program heartbeat ping.
+    Heartbeat,
 }
 
 #[derive(Debug, clap::Args)]
