@@ -54,9 +54,14 @@ impl<'de> Deserialize<'de> for Timestamp {
                 if v.is_empty() {
                     return Ok(Timestamp(0));
                 }
-                v.parse::<i64>()
-                    .map(Timestamp)
-                    .map_err(|e| E::custom(format!("invalid timestamp '{v}': {e}")))
+                if let Ok(n) = v.parse::<i64>() {
+                    return Ok(Timestamp(n));
+                }
+                // chainup WS occasionally emits RFC3339 (e.g. `2026-05-19T19:17:39Z`).
+                if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(v) {
+                    return Ok(Timestamp(dt.timestamp()));
+                }
+                Err(E::custom(format!("invalid timestamp '{v}': not an integer or RFC3339 string")))
             }
         }
         d.deserialize_any(Visitor)
@@ -80,9 +85,13 @@ pub enum OrderSide {
 }
 
 /// Top-level inbound enum for the `/ws/market` channel. Dispatch is keyed on
-/// `event_type`.
+/// `event_type`; the actual payload sits inside the wire `data: {...}` field — the
+/// asyncapi spec shows a flat shape, but production chainup nests it. We use serde's
+/// `tag + content` adjacent encoding to read the nested form. Top-level `asset_id`
+/// (which the server echoes outside `data` on book / price-change frames) is ignored
+/// because the same value is repeated inside the nested payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "event_type", rename_all = "snake_case")]
+#[serde(tag = "event_type", content = "data", rename_all = "snake_case")]
 pub enum MarketEvent {
     Book(BookEvent),
     PriceChange(PriceChangeEvent),
@@ -376,11 +385,14 @@ mod tests {
         let raw = r#"{
             "event_type": "book",
             "asset_id": "1234",
-            "market": "0xabc",
-            "bids": [{"price": "0.4", "size": "10"}],
-            "asks": [{"price": "0.5", "size": "20"}],
-            "timestamp": 1700000000,
-            "hash": "0xdead"
+            "data": {
+                "market": "0xabc",
+                "asset_id": "1234",
+                "bids": [{"price": "0.4", "size": "10"}],
+                "asks": [{"price": "0.5", "size": "20"}],
+                "timestamp": 1700000000,
+                "hash": "0xdead"
+            }
         }"#;
         let ev: MarketEvent = serde_json::from_str(raw).unwrap();
         let MarketEvent::Book(b) = ev else { panic!("wrong variant") };
@@ -392,17 +404,19 @@ mod tests {
     fn price_change_event_decodes() {
         let raw = r#"{
             "event_type": "price_change",
-            "market": "0xabc",
-            "price_changes": [{
-                "asset_id": "1234",
-                "price": "0.4",
-                "size": "0",
-                "side": "BUY",
-                "hash": "h",
-                "best_bid": "0.39",
-                "best_ask": "0.41"
-            }],
-            "timestamp": 1700000000
+            "data": {
+                "market": "0xabc",
+                "price_changes": [{
+                    "asset_id": "1234",
+                    "price": "0.4",
+                    "size": "0",
+                    "side": "BUY",
+                    "hash": "h",
+                    "best_bid": "0.39",
+                    "best_ask": "0.41"
+                }],
+                "timestamp": 1700000000
+            }
         }"#;
         let ev: MarketEvent = serde_json::from_str(raw).unwrap();
         let MarketEvent::PriceChange(p) = ev else { panic!("wrong variant") };
@@ -414,14 +428,16 @@ mod tests {
     fn last_trade_price_event_decodes() {
         let raw = r#"{
             "event_type": "last_trade_price",
-            "asset_id": "1234",
-            "market": "0xabc",
-            "price": "0.5",
-            "size": "1",
-            "fee_rate_bps": "10",
-            "side": "SELL",
-            "timestamp": 1700000001,
-            "transaction_hash": ""
+            "data": {
+                "asset_id": "1234",
+                "market": "0xabc",
+                "price": "0.5",
+                "size": "1",
+                "fee_rate_bps": "10",
+                "side": "SELL",
+                "timestamp": 1700000001,
+                "transaction_hash": ""
+            }
         }"#;
         let ev: MarketEvent = serde_json::from_str(raw).unwrap();
         let MarketEvent::LastTradePrice(lt) = ev else { panic!("wrong variant") };
@@ -531,11 +547,13 @@ mod tests {
     fn tick_size_change_event_decodes() {
         let raw = r#"{
             "event_type": "tick_size_change",
-            "asset_id": "1234",
-            "market": "0xcid",
-            "old_tick_size": "0.01",
-            "new_tick_size": "0.001",
-            "timestamp": 1700000000
+            "data": {
+                "asset_id": "1234",
+                "market": "0xcid",
+                "old_tick_size": "0.01",
+                "new_tick_size": "0.001",
+                "timestamp": 1700000000
+            }
         }"#;
         let ev: MarketEvent = serde_json::from_str(raw).unwrap();
         let MarketEvent::TickSizeChange(tsc) = ev else { panic!("wrong variant") };
@@ -547,12 +565,14 @@ mod tests {
     fn best_bid_ask_event_decodes() {
         let raw = r#"{
             "event_type": "best_bid_ask",
-            "asset_id": "1234",
-            "market": "0xcid",
-            "best_bid": "0.49",
-            "best_ask": "0.51",
-            "spread": "0.02",
-            "timestamp": 1700000000
+            "data": {
+                "asset_id": "1234",
+                "market": "0xcid",
+                "best_bid": "0.49",
+                "best_ask": "0.51",
+                "spread": "0.02",
+                "timestamp": 1700000000
+            }
         }"#;
         let ev: MarketEvent = serde_json::from_str(raw).unwrap();
         assert!(matches!(ev, MarketEvent::BestBidAsk(_)));
@@ -562,14 +582,16 @@ mod tests {
     fn new_market_event_decodes() {
         let raw = r#"{
             "event_type": "new_market",
-            "id": "m1",
-            "question": "Q?",
-            "market": "0xcid",
-            "slug": "q",
-            "assets_ids": ["1", "2"],
-            "outcomes": ["Yes", "No"],
-            "tags": ["sport"],
-            "timestamp": 1700000000
+            "data": {
+                "id": "m1",
+                "question": "Q?",
+                "market": "0xcid",
+                "slug": "q",
+                "assets_ids": ["1", "2"],
+                "outcomes": ["Yes", "No"],
+                "tags": ["sport"],
+                "timestamp": 1700000000
+            }
         }"#;
         let ev: MarketEvent = serde_json::from_str(raw).unwrap();
         let MarketEvent::NewMarket(nm) = ev else { panic!("wrong variant") };
@@ -581,13 +603,15 @@ mod tests {
     fn market_resolved_event_decodes() {
         let raw = r#"{
             "event_type": "market_resolved",
-            "id": "m1",
-            "market": "0xcid",
-            "assets_ids": ["1", "2"],
-            "winning_asset_id": "1",
-            "winning_outcome": "Yes",
-            "tags": [],
-            "timestamp": 1700000001
+            "data": {
+                "id": "m1",
+                "market": "0xcid",
+                "assets_ids": ["1", "2"],
+                "winning_asset_id": "1",
+                "winning_outcome": "Yes",
+                "tags": [],
+                "timestamp": 1700000001
+            }
         }"#;
         let ev: MarketEvent = serde_json::from_str(raw).unwrap();
         let MarketEvent::MarketResolved(mr) = ev else { panic!("wrong variant") };

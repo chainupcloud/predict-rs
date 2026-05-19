@@ -26,21 +26,23 @@ fn round_trip_user(raw: &str) {
 
 #[test]
 fn market_event_round_trip_for_every_documented_variant() {
+    // Chainup wire format wraps each market event's payload inside `data: {...}`.
+    // The asyncapi spec shows a flat shape; production diverges. We follow live behaviour.
     let fixtures = [
         // book
-        r#"{"event_type":"book","asset_id":"1","market":"0xcid","bids":[{"price":"0.4","size":"1"}],"asks":[{"price":"0.6","size":"2"}],"timestamp":1,"hash":"h"}"#,
+        r#"{"event_type":"book","data":{"asset_id":"1","market":"0xcid","bids":[{"price":"0.4","size":"1"}],"asks":[{"price":"0.6","size":"2"}],"timestamp":1,"hash":"h"}}"#,
         // price_change
-        r#"{"event_type":"price_change","market":"0xcid","price_changes":[{"asset_id":"1","price":"0.4","size":"0","side":"BUY","hash":"h","best_bid":"0.39","best_ask":"0.41"}],"timestamp":1}"#,
+        r#"{"event_type":"price_change","data":{"market":"0xcid","price_changes":[{"asset_id":"1","price":"0.4","size":"0","side":"BUY","hash":"h","best_bid":"0.39","best_ask":"0.41"}],"timestamp":1}}"#,
         // last_trade_price
-        r#"{"event_type":"last_trade_price","asset_id":"1","market":"0xcid","price":"0.5","size":"1","fee_rate_bps":"10","side":"SELL","timestamp":1,"transaction_hash":""}"#,
+        r#"{"event_type":"last_trade_price","data":{"asset_id":"1","market":"0xcid","price":"0.5","size":"1","fee_rate_bps":"10","side":"SELL","timestamp":1,"transaction_hash":""}}"#,
         // tick_size_change
-        r#"{"event_type":"tick_size_change","asset_id":"1","market":"0xcid","old_tick_size":"0.01","new_tick_size":"0.001","timestamp":1}"#,
+        r#"{"event_type":"tick_size_change","data":{"asset_id":"1","market":"0xcid","old_tick_size":"0.01","new_tick_size":"0.001","timestamp":1}}"#,
         // best_bid_ask
-        r#"{"event_type":"best_bid_ask","asset_id":"1","market":"0xcid","best_bid":"0.49","best_ask":"0.51","spread":"0.02","timestamp":1}"#,
+        r#"{"event_type":"best_bid_ask","data":{"asset_id":"1","market":"0xcid","best_bid":"0.49","best_ask":"0.51","spread":"0.02","timestamp":1}}"#,
         // new_market
-        r#"{"event_type":"new_market","id":"m","question":"Q?","market":"0xcid","slug":"q","assets_ids":["1","2"],"outcomes":["Yes","No"],"tags":["t"],"timestamp":1}"#,
+        r#"{"event_type":"new_market","data":{"id":"m","question":"Q?","market":"0xcid","slug":"q","assets_ids":["1","2"],"outcomes":["Yes","No"],"tags":["t"],"timestamp":1}}"#,
         // market_resolved
-        r#"{"event_type":"market_resolved","id":"m","market":"0xcid","assets_ids":["1","2"],"winning_asset_id":"1","winning_outcome":"Yes","tags":[],"timestamp":1}"#,
+        r#"{"event_type":"market_resolved","data":{"id":"m","market":"0xcid","assets_ids":["1","2"],"winning_asset_id":"1","winning_outcome":"Yes","tags":[],"timestamp":1}}"#,
     ];
     for raw in fixtures {
         round_trip_market(raw);
