@@ -70,6 +70,9 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
             let resp = client.last_trade_price(&a.token_id).await?;
             output::print_scalar("last_trade_price", resp.price, fmt)?;
         }
+        Command::Gamma(a) => {
+            crate::gamma_commands::run(client, fmt, a).await?;
+        }
     }
     Ok(())
 }

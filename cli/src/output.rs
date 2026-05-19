@@ -11,7 +11,7 @@ pub enum Format {
     Json,
 }
 
-pub fn print_json<T: Serialize>(value: &T) -> anyhow::Result<()> {
+pub fn print_json<T: Serialize + ?Sized>(value: &T) -> anyhow::Result<()> {
     serde_json::to_writer_pretty(std::io::stdout(), value)?;
     println!();
     Ok(())

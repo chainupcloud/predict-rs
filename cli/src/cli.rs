@@ -64,6 +64,8 @@ pub enum Command {
     LastTrade(TokenArgs),
     /// Print the resolved endpoint configuration (debugging).
     Endpoints,
+    /// Gamma metadata API (events / markets / tags / series / comments / profiles / search).
+    Gamma(crate::gamma_commands::GammaArgs),
 }
 
 #[derive(Debug, clap::Args)]
