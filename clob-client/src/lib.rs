@@ -14,11 +14,13 @@
 pub mod auth;
 pub mod client;
 pub mod clob;
+pub mod endpoints;
 pub mod error;
 pub mod signer;
 pub mod types;
 
 pub use client::{Client, ClientBuilder};
+pub use endpoints::Endpoints;
 pub use error::{Error, Result};
 
 /// Default `pm-cup2026` dev endpoint.

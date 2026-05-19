@@ -1,0 +1,54 @@
+# Reference network configuration: pm-cup2026 Monad tenant `hermestrade.xyz`.
+#
+# Per pm-rs/CLAUDE.md, contract addresses must NOT be hard-coded in the SDK.
+# This file is a CALLER-SUPPLIED reference: copy it, edit it, and pass values
+# to the SDK / CLI at runtime (CLI flags, env vars, or a tenant config loader).
+#
+# Source: Telegram message from cryptorobsu, 2026-05-19.
+
+network:
+  name: monad
+  # Set the actual chain id at use time. Monad mainnet vs testnet IDs differ;
+  # confirm with the relayer / on-chain RPC before signing orders.
+  chain_id: ~        # TODO: fill in once confirmed
+  gas_token: MON
+  rpc_url: ~         # TODO: tenant-supplied RPC
+
+tenant:
+  name: hermestrade
+  domain: hermestrade.xyz
+  endpoints:
+    clob: https://clob-api.hermestrade.xyz
+    gamma: https://gamma-api.hermestrade.xyz
+    ws: wss://clob-ws.hermestrade.xyz
+    data: https://data-api.hermestrade.xyz
+    relayer: https://relayer.hermestrade.xyz
+
+contracts:
+  fee_module: "0x383f0Bf1Ad2970A981eE5c96a892285035F59D35"
+  safe_proxy_factory: "0xE401CdA9643788cb660DeB49Bd44a6401a1e6bE9"
+  uma_ctf_adapter: "0x44006C64C5D2f66772a32Da9692d2F5101ebB101"
+  ctf_exchange: "0x017641abFa4264121237023f9Fe678BF00F60De8"
+  light_oracle: "0x8f3E5D465C593c225B3000fe3d9E80a2Da210e44"
+  neg_risk_operator: "0xcAC1A9E449bB6a93A3530f85867b5E583370390a"
+  uma_sports_oracle: "0xDA314bfc1fCc5784fE93D58D8C9FB56568A13e7b"
+  neg_risk_adapter: "0x4c3Ba1A5A6BEaF4CDA6E1Dca75fF9e889A076bE8"
+  neg_risk_ctf_exchange: "0x50b7B00EE75F8bFb5cDa892883aFb3867851c738"
+  neg_risk_fee_module: "0xD1Be9D63D5cC3882e1a7a4eF0cc2213Cee1D7457"
+  neg_risk_uma_ctf_adapter: "0x139941f79bde45BDf28291661d86004a53e6B73c"
+  wrapped_collateral: "0xD26f919dA16E1BB2ab9B5ae49b75C7debD09dCe5"
+  vault: "0xA071F547177b5f3899F160bb1FECf7e11d444a79"
+  fee_vault: "0x222Cfc7134E44b4e2ccDBB59C94933f491660B08"
+  usdw: "0xb7bD080Df56FA76ce6CA4fA737d47815f7F8e746"
+  usd_wrapper: "0x119ED2fa6179052F04b89C7507E0681dc417D2c1"
+
+security:
+  contract_whitelist:
+    - "0x017641abFa4264121237023f9Fe678BF00F60De8"  # CtfExchange
+    - "0x383f0Bf1Ad2970A981eE5c96a892285035F59D35"  # FeeModule
+    - "0x50b7B00EE75F8bFb5cDa892883aFb3867851c738"  # NegRiskCtfExchange
+    - "0xD1Be9D63D5cC3882e1a7a4eF0cc2213Cee1D7457"  # NegRiskFeeModule
+    - "0x4c3Ba1A5A6BEaF4CDA6E1Dca75fF9e889A076bE8"  # NegRiskAdapter (split / merge / convert)
+    - "0xb7bD080Df56FA76ce6CA4fA737d47815f7F8e746"  # USDW
+  multi_send_address: "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761"
+  safe_proxy_factory: "0xE401CdA9643788cb660DeB49Bd44a6401a1e6bE9"

@@ -1,23 +1,31 @@
 //! Command dispatch.
 
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use chrono::DateTime;
-use pm_rs_clob_client::Client;
 use pm_rs_clob_client::clob::types::OrderBookSummary;
+use pm_rs_clob_client::{Client, Endpoints};
 use tabled::Tabled;
+use url::Url;
 
 use crate::cli::{Cli, Command};
 use crate::output::{self, Format};
 
 pub async fn run(args: Cli) -> anyhow::Result<()> {
-    let client = Client::builder()
-        .endpoint(&args.endpoint)
-        .build()
-        .with_context(|| format!("build client for endpoint {}", args.endpoint))?;
+    let mut builder = Client::builder();
 
+    let endpoints = resolve_endpoints(&args)?;
+    builder = builder.endpoints(endpoints);
+    if let Some(cid) = args.chain_id {
+        builder = builder.chain_id(cid);
+    }
+
+    let client = builder.build().context("build client")?;
     let fmt = args.output;
 
     match args.command {
+        Command::Endpoints => {
+            print_endpoints(&client, fmt)?;
+        }
         Command::Ok => {
             let body = client.ok().await?;
             output::print_scalar("status", body.trim(), fmt)?;
@@ -66,6 +74,45 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn resolve_endpoints(args: &Cli) -> anyhow::Result<Endpoints> {
+    match (&args.tenant, &args.clob_endpoint) {
+        (Some(host), _) => {
+            let mut ep = Endpoints::from_tenant(host)
+                .with_context(|| format!("derive endpoints from tenant {host}"))?;
+            if let Some(g) = &args.gamma_endpoint {
+                ep = ep.with_gamma(parse_endpoint(g)?);
+            }
+            if let Some(w) = &args.ws_endpoint {
+                ep = ep.with_ws(parse_endpoint(w)?);
+            }
+            Ok(ep)
+        }
+        (None, Some(clob)) => {
+            let mut ep = Endpoints::clob_only(clob)
+                .with_context(|| format!("parse clob endpoint {clob}"))?;
+            if let Some(g) = &args.gamma_endpoint {
+                ep = ep.with_gamma(parse_endpoint(g)?);
+            }
+            if let Some(w) = &args.ws_endpoint {
+                ep = ep.with_ws(parse_endpoint(w)?);
+            }
+            Ok(ep)
+        }
+        (None, None) => Err(anyhow!(
+            "no endpoints configured: pass --tenant <host> or --clob-endpoint <url> \
+             (or set PM_TENANT / PM_CLOB_ENDPOINT env vars)"
+        )),
+    }
+}
+
+fn parse_endpoint(s: &str) -> anyhow::Result<Url> {
+    let mut s = s.to_owned();
+    if !s.ends_with('/') {
+        s.push('/');
+    }
+    Ok(Url::parse(&s)?)
+}
+
 #[derive(Tabled)]
 struct BookRow {
     side: &'static str,
@@ -85,7 +132,6 @@ fn print_book(book: &OrderBookSummary, fmt: Format) -> anyhow::Result<()> {
             }),
         )?,
         Format::Table => {
-            // Show top 10 asks (descending price), then top 10 bids (descending).
             let mut rows: Vec<BookRow> = Vec::new();
             for lvl in book.asks.iter().rev().take(10) {
                 rows.push(BookRow {
@@ -106,6 +152,31 @@ fn print_book(book: &OrderBookSummary, fmt: Format) -> anyhow::Result<()> {
             } else {
                 output::print_table(rows);
             }
+        }
+    }
+    Ok(())
+}
+
+fn print_endpoints(client: &Client, fmt: Format) -> anyhow::Result<()> {
+    let clob = client.clob_url().as_str().to_owned();
+    let gamma = client.gamma_url().map(|u| u.as_str().to_owned());
+    let ws = client.ws_url().map(|u| u.as_str().to_owned());
+    let chain_id = client.chain_id();
+    match fmt {
+        Format::Json => output::print_json(&serde_json::json!({
+            "clob": clob,
+            "gamma": gamma,
+            "ws": ws,
+            "chain_id": chain_id,
+        }))?,
+        Format::Table => {
+            println!("clob    : {clob}");
+            println!("gamma   : {}", gamma.as_deref().unwrap_or("(unset)"));
+            println!("ws      : {}", ws.as_deref().unwrap_or("(unset)"));
+            println!(
+                "chain_id: {}",
+                chain_id.map(|c| c.to_string()).unwrap_or_else(|| "(unset)".into())
+            );
         }
     }
     Ok(())

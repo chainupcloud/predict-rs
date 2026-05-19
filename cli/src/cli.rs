@@ -7,24 +7,32 @@ use crate::output::Format;
 #[derive(Debug, Parser)]
 #[command(name = "pm", version, about = "ChainUp pm-cup2026 terminal client", long_about = None)]
 pub struct Cli {
-    /// REST endpoint for the chainup CLOB service.
-    /// Defaults to the dev endpoint `https://clob-api.predict.prax1s.xyz`.
-    #[arg(
-        long,
-        global = true,
-        env = "PM_ENDPOINT",
-        default_value = pm_rs_clob_client::DEFAULT_ENDPOINT
-    )]
-    pub endpoint: String,
+    /// Tenant root host. The CLOB / Gamma / WebSocket endpoints are derived using the canonical
+    /// chainup subdomain pattern (`clob-api.<host>` / `gamma-api.<host>` / `clob-ws.<host>`).
+    /// Either this OR `--clob-endpoint` must be supplied — they are mutually exclusive.
+    #[arg(long, global = true, env = "PM_TENANT", conflicts_with = "clob_endpoint")]
+    pub tenant: Option<String>,
 
-    /// Multi-tenant `scopeId` (bytes32 hex). Empty = no scope.
-    /// Only used by signing flows in Phase 2+, kept here so it can be threaded through.
+    /// CLOB REST endpoint. Overrides the derived URL when `--tenant` is also set with `--gamma-endpoint`
+    /// / `--ws-endpoint`; if `--tenant` is absent, this is the only required endpoint flag.
+    #[arg(long, global = true, env = "PM_CLOB_ENDPOINT")]
+    pub clob_endpoint: Option<String>,
+
+    /// Gamma REST endpoint. Defaults to `gamma-api.<tenant>` when `--tenant` is provided.
+    #[arg(long, global = true, env = "PM_GAMMA_ENDPOINT")]
+    pub gamma_endpoint: Option<String>,
+
+    /// CLOB WebSocket endpoint. Defaults to `wss://clob-ws.<tenant>` when `--tenant` is provided.
+    #[arg(long, global = true, env = "PM_WS_ENDPOINT")]
+    pub ws_endpoint: Option<String>,
+
+    /// Multi-tenant `scopeId` (`bytes32` hex). Empty = no scope. Threaded through signing flows in Phase 2+.
     #[arg(long, global = true, env = "PM_SCOPE_ID", default_value = "")]
     pub scope_id: String,
 
-    /// Chain ID for signing. Defaults to OP Sepolia (11155420).
-    #[arg(long, global = true, env = "PM_CHAIN_ID", default_value_t = pm_rs_clob_client::OP_SEPOLIA)]
-    pub chain_id: u64,
+    /// Chain id for signing. Required by Phase 2+ flows; Phase 1 read-only commands ignore it.
+    #[arg(long, global = true, env = "PM_CHAIN_ID")]
+    pub chain_id: Option<u64>,
 
     /// Output format.
     #[arg(short = 'o', long, global = true, env = "PM_OUTPUT", default_value = "table")]
@@ -54,6 +62,8 @@ pub enum Command {
     FeeRate(TokenArgs),
     /// Last trade price for a token.
     LastTrade(TokenArgs),
+    /// Print the resolved endpoint configuration (debugging).
+    Endpoints,
 }
 
 #[derive(Debug, clap::Args)]

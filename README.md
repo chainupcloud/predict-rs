@@ -22,14 +22,47 @@ Cargo workspace, two member crates:
 ```bash
 cargo build
 
-# Public endpoints — no wallet needed
-./target/debug/pm --endpoint https://clob-api.predict.prax1s.xyz ok
-./target/debug/pm --endpoint https://clob-api.predict.prax1s.xyz time
-./target/debug/pm --endpoint https://clob-api.predict.prax1s.xyz midpoint <TOKEN_ID>
+# Point the CLI at a tenant — derives clob-api / gamma-api / clob-ws subdomains automatically.
+./target/debug/pm --tenant hermestrade.xyz ok
+./target/debug/pm --tenant hermestrade.xyz time
+./target/debug/pm --tenant hermestrade.xyz endpoints
+./target/debug/pm --tenant hermestrade.xyz midpoint <TOKEN_ID>
 
-# Output as JSON (for scripting)
-./target/debug/pm -o json time
+# Or pass the CLOB URL directly (useful for non-canonical hostnames / dev setups).
+./target/debug/pm --clob-endpoint https://clob-api.predict.prax1s.xyz time
+
+# Output as JSON (for scripting).
+./target/debug/pm --tenant hermestrade.xyz -o json time
 ```
+
+Env vars `PM_TENANT`, `PM_CLOB_ENDPOINT`, `PM_GAMMA_ENDPOINT`, `PM_WS_ENDPOINT`, `PM_CHAIN_ID`, `PM_SCOPE_ID` mirror the flags.
+
+### SDK usage
+
+The SDK mirrors `pm-sdk-go`'s `WithEndpoints(clob, gamma, ws)` shape:
+
+```rust
+use pm_rs_clob_client::{Client, Endpoints};
+
+// Explicit three-URL form
+let client = Client::builder()
+    .endpoints(Endpoints::new(
+        "https://clob-api.hermestrade.xyz",
+        "https://gamma-api.hermestrade.xyz",
+        "wss://clob-ws.hermestrade.xyz",
+    )?)
+    .chain_id(143)             // Monad chain id — confirm at use time
+    .user_agent("my-app/1.0")
+    .build()?;
+
+// Or derive from tenant host (chainup canonical pattern)
+let client = Client::builder()
+    .tenant("hermestrade.xyz")?
+    .chain_id(143)
+    .build()?;
+```
+
+Reference network configs (NOT hard-coded in the SDK — caller supplies them at runtime) live under [`examples/networks/`](examples/networks/).
 
 ## Why a chainup-specific fork?
 
