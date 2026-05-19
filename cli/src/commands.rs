@@ -228,25 +228,18 @@ async fn delete_with_nonce(
     _key: uuid::Uuid,
     nonce: u32,
 ) -> anyhow::Result<()> {
-    // delete_api_key uses nonce=None (=> 0); for non-zero nonce we issue a parallel L1
-    // signing call directly. Simpler: just re-use create_api_key's L1 header helper.
-    use pm_rs_clob_client::auth::build_l1_headers_with_timestamp;
-    use pm_rs_clob_client::auth::current_timestamp;
-    let _ = build_l1_headers_with_timestamp; // ensure visibility
-    let _ = current_timestamp;
-    if nonce == 0 {
-        client.delete_api_key(signer, uuid::Uuid::nil()).await?;
-    } else {
-        // For non-zero nonce we currently lack a public Client::delete_api_key_with_nonce
-        // helper; the SDK pull-through stays simple for Phase 2.1 because the chainup server
-        // identifies revoked rows by (address, scope, nonce=0) for the common case. If
-        // callers need non-zero nonces this is a known limitation tracked in PHASE2_NOTES.md.
+    // The SDK's `Client::delete_api_key` currently hard-codes nonce = 0 (the only value any
+    // current consumer needs). For non-zero nonces the server identifies the row by
+    // `(address, scope, nonce)` but we lack a public Client::delete_api_key_with_nonce
+    // helper; tracked in PHASE2_NOTES.md.
+    if nonce != 0 {
         anyhow::bail!(
             "delete-key with --nonce != 0 is not yet wired: the SDK helper currently hard-codes \
              nonce=0. Open an issue or pass --nonce 0 (and confirm with the server admin which \
              nonce the key was bound to)."
         );
     }
+    client.delete_api_key(signer, uuid::Uuid::nil()).await?;
     Ok(())
 }
 
