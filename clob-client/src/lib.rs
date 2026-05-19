@@ -20,10 +20,13 @@ pub mod gamma;
 pub mod signer;
 pub mod types;
 
+pub use auth::Credentials;
 pub use client::{Client, ClientBuilder};
+pub use clob::types::{ApiKeyInfo, AssetType, BalanceAllowanceResponse};
 pub use endpoints::Endpoints;
 pub use error::{Error, Result};
 pub use gamma::GammaClient;
+pub use signer::PMCup26Signer;
 
 /// Default `pm-cup2026` dev endpoint.
 pub const DEFAULT_ENDPOINT: &str = "https://clob-api.predict.prax1s.xyz";

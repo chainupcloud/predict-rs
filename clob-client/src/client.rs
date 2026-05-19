@@ -40,18 +40,23 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use reqwest::{Client as HttpClient, Method};
+use reqwest::header::HeaderMap;
+use reqwest::{Client as HttpClient, Method, RequestBuilder};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use url::Url;
+use uuid::Uuid;
 
-use crate::auth::Credentials;
+use crate::auth::{
+    Credentials, build_l1_headers, build_l2_headers, current_timestamp,
+};
 use crate::clob::types::{
-    FeeRateResponse, LastTradePriceResponse, MidpointResponse, OrderBookSummary, PriceResponse,
-    SpreadResponse, TickSizeResponse,
+    ApiKeyInfo, AssetType, BalanceAllowanceResponse, FeeRateResponse, LastTradePriceResponse,
+    MidpointResponse, OrderBookSummary, PriceResponse, SpreadResponse, TickSizeResponse,
 };
 use crate::endpoints::Endpoints;
 use crate::error::{Error, Result};
+use crate::signer::PMCup26Signer;
 use crate::types::Side;
 
 const DEFAULT_USER_AGENT: &str = concat!("pm-rs-clob-client/", env!("CARGO_PKG_VERSION"));
@@ -67,8 +72,10 @@ struct Inner {
     http: HttpClient,
     endpoints: Endpoints,
     chain_id: Option<u64>,
-    #[allow(dead_code)] // used by Phase 2 L2 paths
     credentials: Option<Credentials>,
+    /// EOA address of the configured L1 signer. Required for L2 calls (`PRED_ADDRESS`
+    /// header); optional when only public market-data endpoints are used.
+    signer_address: Option<crate::types::Address>,
 }
 
 impl Client {
@@ -212,29 +219,227 @@ impl Client {
         Ok(parsed)
     }
 
-    // Methods used by Phase 2 (kept here as `pub(crate)` for visibility planning):
+    // ─── Phase 2.1: L1 auth — API key CRUD ──────────────────────────────
+
+    /// Idempotent: try `POST /auth/api-key` first; on any 4xx response fall back to
+    /// `GET /auth/derive-api-key`. Mirrors `rs-clob-client`'s
+    /// `Client::create_or_derive_api_key` flow with chainup `PRED_*` headers.
+    pub async fn create_or_derive_api_key(
+        &self,
+        signer: &PMCup26Signer,
+        nonce: Option<u32>,
+    ) -> Result<Credentials> {
+        match self.create_api_key(signer, nonce).await {
+            Ok(creds) => Ok(creds),
+            // Server responded with HTTP error (e.g. 409 duplicate / 400 invalid request).
+            // Network / decoding failures bubble up unchanged.
+            Err(Error::Api { .. }) => self.derive_api_key(signer, nonce).await,
+            Err(other) => Err(other),
+        }
+    }
+
+    /// `POST /auth/api-key` — create a new L2 API key bound to `(signer.address, scope_id, nonce)`.
+    pub async fn create_api_key(
+        &self,
+        signer: &PMCup26Signer,
+        nonce: Option<u32>,
+    ) -> Result<Credentials> {
+        let headers = build_l1_headers(signer, nonce)?;
+        let resp = self
+            .send_with_headers(Method::POST, "/auth/api-key", None, headers, None)
+            .await?;
+        let body = check_ok(resp, "POST", "/auth/api-key").await?;
+        serde_json::from_str(&body)
+            .map_err(|e| Error::Validation(format!("decoding /auth/api-key response: {e}")))
+    }
+
+    /// `GET /auth/derive-api-key` — recover the credentials for an existing key without
+    /// minting a new one. Signs the same `ClobAuth` payload as [`Self::create_api_key`].
+    pub async fn derive_api_key(
+        &self,
+        signer: &PMCup26Signer,
+        nonce: Option<u32>,
+    ) -> Result<Credentials> {
+        let headers = build_l1_headers(signer, nonce)?;
+        let resp = self
+            .send_with_headers(Method::GET, "/auth/derive-api-key", None, headers, None)
+            .await?;
+        let body = check_ok(resp, "GET", "/auth/derive-api-key").await?;
+        serde_json::from_str(&body)
+            .map_err(|e| Error::Validation(format!("decoding /auth/derive-api-key response: {e}")))
+    }
+
+    /// `DELETE /auth/api-key` — revoke the L2 key for `(signer.address, scope_id, nonce)`.
+    ///
+    /// The `key` argument is accepted for API symmetry with the rs-clob-client method but is
+    /// **not** sent — the server identifies the row by `(address, scope, nonce)` and ignores
+    /// any body. Pass [`Uuid::nil`] if you only have `(signer, nonce)` in hand.
+    pub async fn delete_api_key(&self, signer: &PMCup26Signer, key: Uuid) -> Result<()> {
+        let _ = key;
+        // DELETE uses the same L1 headers as POST / GET (nonce defaults to 0).
+        let headers = build_l1_headers(signer, None)?;
+        let resp = self
+            .send_with_headers(Method::DELETE, "/auth/api-key", None, headers, None)
+            .await?;
+        check_ok(resp, "DELETE", "/auth/api-key").await?;
+        Ok(())
+    }
+
+    // ─── Phase 2.1: L2 auth — read methods ──────────────────────────────
+
+    /// `GET /auth/api-keys` — list active API keys + chainup `proxy_wallet` for the
+    /// authenticated address. Requires [`ClientBuilder::credentials`] + [`ClientBuilder::chain_id`].
+    pub async fn api_keys(&self) -> Result<ApiKeyInfo> {
+        self.l2_get_json::<ApiKeyInfo>("/auth/api-keys", &[]).await
+    }
+
+    /// `GET /balance-allowance?asset_type=...&token_id=...` — Safe-wallet balance + allowances
+    /// for the authenticated address. The server derives the Safe address from `EOA + scopeId`.
+    ///
+    /// Validation matches the server:
+    /// - `Conditional` requires `token_id`.
+    /// - `Collateral` must NOT carry a `token_id`.
+    pub async fn balance_allowance(
+        &self,
+        asset_type: AssetType,
+        token_id: Option<&str>,
+    ) -> Result<BalanceAllowanceResponse> {
+        let query = balance_allowance_query(asset_type, token_id)?;
+        self.l2_get_json::<BalanceAllowanceResponse>("/balance-allowance", &query)
+            .await
+    }
+
+    /// `GET /balance-allowance/update?asset_type=...&token_id=...` — force the server to refresh
+    /// its subgraph balance cache, then return the same shape as [`Self::balance_allowance`].
+    pub async fn update_balance_allowance(
+        &self,
+        asset_type: AssetType,
+        token_id: Option<&str>,
+    ) -> Result<BalanceAllowanceResponse> {
+        let query = balance_allowance_query(asset_type, token_id)?;
+        self.l2_get_json::<BalanceAllowanceResponse>("/balance-allowance/update", &query)
+            .await
+    }
+
+    // ─── L2 HTTP plumbing ───────────────────────────────────────────────
+
+    /// Issue an L2-authenticated request with optional query and JSON body. Constructs the
+    /// HMAC over the **path only** (no query string) per the server's
+    /// `middleware/auth.go::computeHMAC` contract, then attaches the five `PRED_*` headers.
+    pub(crate) async fn request_authenticated(
+        &self,
+        method: Method,
+        path: &str,
+        query: &[(&str, &str)],
+        body: Option<&str>,
+    ) -> Result<reqwest::Response> {
+        let creds = self.require_credentials()?;
+        let address = self.require_signer_address()?;
+        let timestamp = current_timestamp();
+        let method_str = method.as_str().to_owned();
+        let body_str = body.unwrap_or("");
+        let headers = build_l2_headers(creds, address, &timestamp, &method_str, path, body_str)?;
+        self.send_with_headers(method, path, Some(query), headers, body.map(str::to_owned))
+            .await
+    }
+
+    /// L2 GET → JSON helper.
+    async fn l2_get_json<R: DeserializeOwned>(
+        &self,
+        path: &str,
+        query: &[(&str, &str)],
+    ) -> Result<R> {
+        let resp = self
+            .request_authenticated(Method::GET, path, query, None)
+            .await?;
+        let body = check_ok(resp, "GET", path).await?;
+        serde_json::from_str::<R>(&body)
+            .map_err(|e| Error::Validation(format!("decoding {path} response: {e}")))
+    }
+
+    async fn send_with_headers(
+        &self,
+        method: Method,
+        path: &str,
+        query: Option<&[(&str, &str)]>,
+        headers: HeaderMap,
+        body: Option<String>,
+    ) -> Result<reqwest::Response> {
+        let url = self.clob(path)?;
+        let mut req: RequestBuilder = self.inner.http.request(method, url).headers(headers);
+        if let Some(q) = query {
+            if !q.is_empty() {
+                req = req.query(q);
+            }
+        }
+        if let Some(b) = body {
+            req = req.header(
+                reqwest::header::CONTENT_TYPE,
+                reqwest::header::HeaderValue::from_static("application/json"),
+            );
+            req = req.body(b);
+        }
+        Ok(req.send().await?)
+    }
+
+    // ─── credentials / signer plumbing ──────────────────────────────────
+
+    /// Reference to the configured [`Credentials`], or `None` when the client is
+    /// unauthenticated.
+    #[must_use]
+    pub fn credentials(&self) -> Option<&Credentials> {
+        self.inner.credentials.as_ref()
+    }
+
+    /// Return the configured credentials, or `Error::NotAuthenticated`.
+    pub(crate) fn require_credentials(&self) -> Result<&Credentials> {
+        self.inner.credentials.as_ref().ok_or(Error::NotAuthenticated)
+    }
+
+    /// EOA address for the L2 `PRED_ADDRESS` header. We hold the address rather than the
+    /// signer because L2 calls never sign EIP-712 payloads.
+    pub(crate) fn require_signer_address(&self) -> Result<crate::types::Address> {
+        self.inner
+            .signer_address
+            .ok_or_else(|| Error::validation("L2 request requires signer address: call ClientBuilder::signer_address(...)"))
+    }
 
     #[allow(dead_code)]
     pub(crate) fn http(&self) -> &HttpClient {
         &self.inner.http
     }
+}
 
-    #[allow(dead_code)]
-    pub(crate) fn credentials(&self) -> Option<&Credentials> {
-        self.inner.credentials.as_ref()
+fn balance_allowance_query<'a>(
+    asset_type: AssetType,
+    token_id: Option<&'a str>,
+) -> Result<Vec<(&'static str, &'a str)>> {
+    let mut q: Vec<(&'static str, &'a str)> = Vec::with_capacity(2);
+    q.push(("asset_type", asset_type.as_query_str()));
+    match (asset_type, token_id) {
+        (AssetType::Conditional, Some(t)) if !t.is_empty() => q.push(("token_id", t)),
+        (AssetType::Conditional, _) => {
+            return Err(Error::validation(
+                "balance-allowance: token_id is required when asset_type=CONDITIONAL",
+            ));
+        }
+        (AssetType::Collateral, Some(t)) if !t.is_empty() => {
+            return Err(Error::validation(
+                "balance-allowance: token_id must be omitted when asset_type=COLLATERAL",
+            ));
+        }
+        (AssetType::Collateral, _) => {}
     }
+    Ok(q)
+}
 
-    #[allow(dead_code)]
-    pub(crate) fn require_credentials(&self) -> Result<&Credentials> {
-        self.inner.credentials.as_ref().ok_or(Error::NotAuthenticated)
+async fn check_ok(resp: reqwest::Response, method: &'static str, path: &str) -> Result<String> {
+    let status = resp.status();
+    let body = resp.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(Error::api(status, method, path, body));
     }
-
-    #[allow(dead_code)]
-    pub(crate) async fn execute_raw(&self, method: Method, path: &str) -> Result<reqwest::Response> {
-        let url = self.clob(path)?;
-        let resp = self.inner.http.request(method, url).send().await?;
-        Ok(resp)
-    }
+    Ok(body)
 }
 
 /// Builder for [`Client`].
@@ -245,6 +450,7 @@ pub struct ClientBuilder {
     timeout: Duration,
     user_agent: String,
     credentials: Option<Credentials>,
+    signer_address: Option<crate::types::Address>,
 }
 
 impl Default for ClientBuilder {
@@ -262,6 +468,7 @@ impl ClientBuilder {
             timeout: Duration::from_secs(30),
             user_agent: DEFAULT_USER_AGENT.to_owned(),
             credentials: None,
+            signer_address: None,
         }
     }
 
@@ -347,6 +554,14 @@ impl ClientBuilder {
         self
     }
 
+    /// EOA address of the L1 signer that owns the configured [`Credentials`]. Required for
+    /// any L2-authenticated call — the `PRED_ADDRESS` header is sent in every L2 request.
+    #[must_use]
+    pub fn signer_address(mut self, address: crate::types::Address) -> Self {
+        self.signer_address = Some(address);
+        self
+    }
+
     pub fn build(self) -> Result<Client> {
         let endpoints = self
             .endpoints
@@ -361,6 +576,7 @@ impl ClientBuilder {
                 endpoints,
                 chain_id: self.chain_id,
                 credentials: self.credentials,
+                signer_address: self.signer_address,
             }),
         })
     }

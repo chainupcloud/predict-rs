@@ -40,3 +40,4 @@ tokio = { workspace = true }
 serde_json = { workspace = true }
 hex = { workspace = true }
 httpmock = { workspace = true }
+wiremock = "0.6"
