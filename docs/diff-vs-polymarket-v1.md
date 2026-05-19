@@ -137,7 +137,12 @@ Last updated: 2026-05-19 (Phase 2.1: L1/L2 auth + balance-allowance).
 | Builder authentication | `promote_to_builder(BuilderConfig)` + remote signer service | Not implemented (no user requirement yet) |
 | AWS KMS signer | Built-in `signer-aws` example | Not implemented (callers can plug in any `alloy::signers::Signer` impl) |
 | Heartbeat long connection | `heartbeats` feature flag | Phase 3 |
-| WebSocket asset-ID type | `Vec<String>` | Same (Phase 3) |
+| WebSocket asset-ID type | `Vec<String>` | Same — shipped in Phase 3b (see [`docs/ws.md`](ws.md)) |
+| WebSocket transport | `tokio_tungstenite`, type-state authenticated client | `tokio_tungstenite`, single-state client; auth carried in the first WS frame for the user channel (matches the chainup server contract, **not** HTTP `PRED_*` headers) |
+| WebSocket subscribe message | Single `SubscriptionRequest` covering both channels | Two distinct envelopes — `MarketSubscribeRequest` (`type=market`, `assets_ids`) and `UserSubscribeRequest` (`type=user`, `auth.{apiKey,passphrase}`, `markets`) |
+| WebSocket heartbeat | Protocol-level Ping | Text frame `"PING"` / `"PONG"` (chainup-specific; see `services/clob-service/internal/wsservice/`) |
+| WebSocket runtime sub/unsub | Per-channel `subscribe` / `unsubscribe` envelopes | Same shape (`{"operation":"subscribe","assets_ids":[...]}` etc.) |
+| WebSocket reconnect | Exponential backoff, re-emits subscriptions | Same |
 | Public utility functions | Private | Phase 3 will expose a `utilities` module, aligned with the V2 SDK's design |
 
 ---
