@@ -64,6 +64,8 @@ clap = { version = "4", features = ["derive", "env"] }
 tabled = "0.17"
 dirs = "6"
 rustyline = "15"
+toml = "0.8"
+tempfile = "3"
 
 [profile.release]
 lto = "thin"

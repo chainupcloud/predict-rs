@@ -36,9 +36,16 @@ pub struct Cli {
 
     /// EOA private key (hex, with or without `0x` prefix) used to sign L1 EIP-712 challenges.
     /// Required by every Phase 2 subcommand. Prefer the env var over the flag — exposing a
-    /// private key in shell history is unsafe.
+    /// private key in shell history is unsafe. When absent, falls back to the value stored
+    /// by `pm wallet create` / `pm wallet import` in `<config-dir>/config.toml`.
     #[arg(long, global = true, env = "PM_PRIVATE_KEY", hide_env_values = true)]
     pub private_key: Option<String>,
+
+    /// Override the directory holding `config.toml` (default: `dirs::config_dir()/pm`,
+    /// i.e. `~/.config/pm` on Linux). Used by `pm wallet …` for persistence and by every
+    /// other command as the final fallback for `--private-key` / `--chain-id` / `--scope-id`.
+    #[arg(long, global = true, env = "PM_CONFIG_DIR")]
+    pub config_dir: Option<String>,
 
     /// CTFExchange contract address. Currently unused on Phase 2.1 paths (`order` flows land
     /// in Phase 2.2) but accepted up front so workflows that combine auth + order placement
@@ -98,6 +105,9 @@ pub enum Command {
     Trade(crate::order_commands::TradeArgs),
     /// `POST /heartbeats` — maker-program heartbeat ping.
     Heartbeat,
+    /// Local wallet / config-file management (create / import / address / show / reset).
+    #[command(subcommand)]
+    Wallet(crate::wallet_commands::WalletCommand),
 }
 
 #[derive(Debug, clap::Args)]

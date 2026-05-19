@@ -14,7 +14,7 @@ Last updated: 2026-05-19 (Phase 2.2: order construction / signing / placement / 
 | CLI crate name | `polymarket-cli` | `pm-cli` |
 | CLI binary name | `polymarket` | `pm` |
 | Repository layout | Two independent git repos | Single Cargo workspace `pm-rs/{clob-client, cli}` |
-| Config directory | `~/.config/polymarket/config.json` | `~/.config/pm/config.toml` (planned for Phase 2) |
+| Config directory | `~/.config/polymarket/config.json` | `~/.config/pm/config.toml` — see [`docs/wallet.md`](wallet.md). Path overridable via `--config-dir` / `PM_CONFIG_DIR`; file mode 0600, parent dir 0700, atomic-rename writes. |
 
 ---
 

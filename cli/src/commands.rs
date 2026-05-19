@@ -16,9 +16,21 @@ use crate::cli::{AuthCommand, BalanceArgs, Cli, Command, CreateKeyArgs, DeleteKe
 use crate::output::{self, Format};
 
 pub async fn run(args: Cli) -> anyhow::Result<()> {
+    // `pm wallet …` is local-only — no endpoint required. Dispatch before endpoint
+    // resolution so the wallet UX works on a fresh checkout with no flags set.
+    if matches!(args.command, Command::Wallet(_)) {
+        let mut owned = args;
+        let fmt = owned.output;
+        let sub = match std::mem::replace(&mut owned.command, Command::Ok) {
+            Command::Wallet(w) => w,
+            _ => unreachable!(),
+        };
+        return crate::wallet_commands::run(&owned, &sub, fmt).await;
+    }
+
     let endpoints = resolve_endpoints(&args)?;
     let mut builder = Client::builder().endpoints(endpoints);
-    if let Some(cid) = args.chain_id {
+    if let Some(cid) = effective_chain_id(&args)? {
         builder = builder.chain_id(cid);
     }
 
@@ -105,6 +117,7 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
         Command::Order(sub) => crate::order_commands::run(&args, sub, fmt).await?,
         Command::Trade(a) => crate::order_commands::run_trade(&args, a, fmt).await?,
         Command::Heartbeat => crate::order_commands::run_heartbeat(&args, fmt).await?,
+        Command::Wallet(_) => unreachable!("handled by early-return above"),
     }
     Ok(())
 }
@@ -164,18 +177,27 @@ async fn run_balance(args: &Cli, a: &BalanceArgs, fmt: Format) -> anyhow::Result
 // ─── helpers: signer / credentials / client builders ────────────────────
 
 pub(crate) fn signer_from_args(args: &Cli) -> anyhow::Result<PMCup26Signer> {
-    let pk = args.private_key.as_deref().ok_or_else(|| {
-        anyhow!(
-            "private key required for L1 auth: pass --private-key or set PM_PRIVATE_KEY"
-        )
-    })?;
-    let chain_id = args.chain_id.ok_or_else(|| {
-        anyhow!("chain id required for L1 auth: pass --chain-id or set PM_CHAIN_ID")
-    })?;
+    let stored = crate::config_store::load(args.config_dir.as_deref())?;
+    let pk_owned: String;
+    let pk: &str = if let Some(p) = args.private_key.as_deref() {
+        p
+    } else if let Some(p) = stored.as_ref().and_then(|c| c.private_key.as_deref()) {
+        pk_owned = p.to_owned();
+        &pk_owned
+    } else {
+        return Err(anyhow!(
+            "private key required for L1 auth: pass --private-key, set PM_PRIVATE_KEY, or run `pm wallet create`"
+        ));
+    };
+
+    let chain_id = effective_chain_id_with(args, stored.as_ref())?
+        .ok_or_else(|| anyhow!("chain id required for L1 auth: pass --chain-id or set PM_CHAIN_ID"))?;
+
     let mut signer = PMCup26Signer::from_hex(pk, chain_id)?;
-    if !args.scope_id.is_empty() {
-        let scope = ScopeId::from_hex(&args.scope_id)
-            .with_context(|| format!("invalid --scope-id '{}'", args.scope_id))?;
+    let scope_hex = effective_scope_id(args, stored.as_ref());
+    if !scope_hex.is_empty() {
+        let scope = ScopeId::from_hex(&scope_hex)
+            .with_context(|| format!("invalid scope id '{scope_hex}'"))?;
         signer = signer.with_scope_id(scope);
     }
     if let Some(addr_hex) = &args.exchange_address {
@@ -184,6 +206,27 @@ pub(crate) fn signer_from_args(args: &Cli) -> anyhow::Result<PMCup26Signer> {
         signer = signer.with_exchange(addr);
     }
     Ok(signer)
+}
+
+fn effective_chain_id(args: &Cli) -> anyhow::Result<Option<u64>> {
+    let stored = crate::config_store::load(args.config_dir.as_deref())?;
+    effective_chain_id_with(args, stored.as_ref())
+}
+
+fn effective_chain_id_with(
+    args: &Cli,
+    stored: Option<&crate::config_store::StoredConfig>,
+) -> anyhow::Result<Option<u64>> {
+    Ok(args.chain_id.or_else(|| stored.and_then(|c| c.chain_id)))
+}
+
+fn effective_scope_id(args: &Cli, stored: Option<&crate::config_store::StoredConfig>) -> String {
+    if !args.scope_id.is_empty() {
+        return args.scope_id.clone();
+    }
+    stored
+        .and_then(|c| c.scope_id.clone())
+        .unwrap_or_default()
 }
 
 fn build_l1_client(args: &Cli) -> anyhow::Result<Client> {

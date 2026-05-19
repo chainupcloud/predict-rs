@@ -1,8 +1,10 @@
 mod cli;
 mod commands;
+mod config_store;
 mod gamma_commands;
 mod order_commands;
 mod output;
+mod wallet_commands;
 mod ws_commands;
 
 use clap::Parser;
