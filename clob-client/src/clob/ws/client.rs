@@ -5,13 +5,20 @@
 //! dial a fresh socket — chainup runs both channels on `:8082` but at
 //! different paths (`/ws/market` vs `/ws/user`).
 
+use std::pin::Pin;
+
+use futures::{Stream, StreamExt as _};
+use rust_decimal::Decimal;
 use secrecy::ExposeSecret as _;
 use tokio::sync::mpsc;
 use url::Url;
 
 use super::subscription::{self, MarketStream, UserStream};
 use super::types::request::MarketLevel;
-use super::types::response::{MarketEvent, UserEvent};
+use super::types::response::{
+    BestBidAskEvent, BookEvent, LastTradePriceEvent, MarketEvent, MarketResolvedEvent,
+    NewMarketEvent, OrderEvent, PriceChangeEvent, TickSizeChangeEvent, TradeEvent, UserEvent,
+};
 use crate::auth::Credentials;
 use crate::error::{Error, Result};
 use crate::ws::{WsConfig, WsConnection, WsError};
@@ -166,5 +173,178 @@ impl ClobWebSocketClient {
     fn join(&self, suffix: &str) -> Result<Url> {
         let trimmed = suffix.trim_start_matches('/');
         Ok(self.base.join(trimmed)?)
+    }
+}
+
+// ─── typed-filter helpers ──────────────────────────────────────────────────
+//
+// Pattern lifted from polymarket's `rs-clob-client::clob::ws::client` — each
+// method spins up the underlying channel stream and `filter_map`s to keep only
+// the variant the caller cares about. Errors propagate untouched. Use these
+// when you want a typed stream; use `subscribe_market` / `subscribe_user`
+// directly when you need the control handle (runtime subscribe / unsubscribe).
+
+/// Filter the next `MarketEvent` for the requested variant. Used by the typed
+/// helpers below to avoid 6 near-identical closures.
+macro_rules! market_filter {
+    ($variant:path) => {
+        |res| async move {
+            match res {
+                Ok($variant(inner)) => Some(Ok(inner)),
+                Ok(_) => None,
+                Err(e) => Some(Err(e)),
+            }
+        }
+    };
+}
+
+macro_rules! user_filter {
+    ($variant:path) => {
+        |res| async move {
+            match res {
+                Ok($variant(inner)) => Some(Ok(inner)),
+                Ok(_) => None,
+                Err(e) => Some(Err(e)),
+            }
+        }
+    };
+}
+
+/// `(bid + ask) / 2` snapshot computed from a [`BookEvent`].
+///
+/// Mirrors polymarket's `MidpointUpdate`. Emitted only when both sides have at
+/// least one level — frames where one side is empty are dropped.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MidpointUpdate {
+    pub asset_id: String,
+    pub market: String,
+    pub midpoint: Decimal,
+    pub timestamp: super::types::response::Timestamp,
+}
+
+impl ClobWebSocketClient {
+    /// Subscribe and yield only `book` frames. See [`Self::subscribe_market`]
+    /// when you also want `price_change` / `last_trade_price` / etc.
+    pub async fn subscribe_orderbook(
+        &self,
+        asset_ids: Vec<String>,
+        opts: MarketSubscribeOpts,
+    ) -> Result<Pin<Box<dyn Stream<Item = std::result::Result<BookEvent, WsError>> + Send>>> {
+        let stream = self.subscribe_market(asset_ids, opts).await?;
+        Ok(Box::pin(stream.filter_map(market_filter!(MarketEvent::Book))))
+    }
+
+    /// Subscribe and yield only `price_change` frames.
+    pub async fn subscribe_prices(
+        &self,
+        asset_ids: Vec<String>,
+        opts: MarketSubscribeOpts,
+    ) -> Result<Pin<Box<dyn Stream<Item = std::result::Result<PriceChangeEvent, WsError>> + Send>>> {
+        let stream = self.subscribe_market(asset_ids, opts).await?;
+        Ok(Box::pin(stream.filter_map(market_filter!(MarketEvent::PriceChange))))
+    }
+
+    /// Subscribe and yield only `last_trade_price` frames.
+    pub async fn subscribe_last_trade_price(
+        &self,
+        asset_ids: Vec<String>,
+        opts: MarketSubscribeOpts,
+    ) -> Result<Pin<Box<dyn Stream<Item = std::result::Result<LastTradePriceEvent, WsError>> + Send>>> {
+        let stream = self.subscribe_market(asset_ids, opts).await?;
+        Ok(Box::pin(stream.filter_map(market_filter!(MarketEvent::LastTradePrice))))
+    }
+
+    /// Subscribe and yield only `tick_size_change` frames.
+    pub async fn subscribe_tick_size_change(
+        &self,
+        asset_ids: Vec<String>,
+        opts: MarketSubscribeOpts,
+    ) -> Result<Pin<Box<dyn Stream<Item = std::result::Result<TickSizeChangeEvent, WsError>> + Send>>> {
+        let stream = self.subscribe_market(asset_ids, opts).await?;
+        Ok(Box::pin(stream.filter_map(market_filter!(MarketEvent::TickSizeChange))))
+    }
+
+    /// Subscribe and yield only `best_bid_ask` frames. Requires the server-side
+    /// `custom_feature_enabled` flag, so the helper forces `opts.with_custom_features(true)`.
+    pub async fn subscribe_best_bid_ask(
+        &self,
+        asset_ids: Vec<String>,
+        opts: MarketSubscribeOpts,
+    ) -> Result<Pin<Box<dyn Stream<Item = std::result::Result<BestBidAskEvent, WsError>> + Send>>> {
+        let stream = self
+            .subscribe_market(asset_ids, opts.with_custom_features(true))
+            .await?;
+        Ok(Box::pin(stream.filter_map(market_filter!(MarketEvent::BestBidAsk))))
+    }
+
+    /// Subscribe and yield only `new_market` frames. Requires `custom_feature_enabled`.
+    pub async fn subscribe_new_markets(
+        &self,
+        asset_ids: Vec<String>,
+        opts: MarketSubscribeOpts,
+    ) -> Result<Pin<Box<dyn Stream<Item = std::result::Result<NewMarketEvent, WsError>> + Send>>> {
+        let stream = self
+            .subscribe_market(asset_ids, opts.with_custom_features(true))
+            .await?;
+        Ok(Box::pin(stream.filter_map(market_filter!(MarketEvent::NewMarket))))
+    }
+
+    /// Subscribe and yield only `market_resolved` frames. Requires `custom_feature_enabled`.
+    pub async fn subscribe_market_resolutions(
+        &self,
+        asset_ids: Vec<String>,
+        opts: MarketSubscribeOpts,
+    ) -> Result<Pin<Box<dyn Stream<Item = std::result::Result<MarketResolvedEvent, WsError>> + Send>>> {
+        let stream = self
+            .subscribe_market(asset_ids, opts.with_custom_features(true))
+            .await?;
+        Ok(Box::pin(stream.filter_map(market_filter!(MarketEvent::MarketResolved))))
+    }
+
+    /// Subscribe and emit `(best_bid + best_ask) / 2` midpoint updates computed from `book`
+    /// frames. Frames with one side empty are dropped. Mirrors polymarket's
+    /// `subscribe_midpoints`.
+    pub async fn subscribe_midpoints(
+        &self,
+        asset_ids: Vec<String>,
+        opts: MarketSubscribeOpts,
+    ) -> Result<Pin<Box<dyn Stream<Item = std::result::Result<MidpointUpdate, WsError>> + Send>>> {
+        let stream = self.subscribe_orderbook(asset_ids, opts).await?;
+        Ok(Box::pin(stream.filter_map(|res| async move {
+            match res {
+                Ok(book) => {
+                    let (Some(bid), Some(ask)) = (book.bids.first(), book.asks.first()) else {
+                        return None;
+                    };
+                    let bid_p: Decimal = bid.price.parse().ok()?;
+                    let ask_p: Decimal = ask.price.parse().ok()?;
+                    Some(Ok(MidpointUpdate {
+                        asset_id: book.asset_id,
+                        market: book.market,
+                        midpoint: (bid_p + ask_p) / Decimal::TWO,
+                        timestamp: book.timestamp,
+                    }))
+                }
+                Err(e) => Some(Err(e)),
+            }
+        })))
+    }
+
+    /// Subscribe and yield only `order` events from the user channel.
+    pub async fn subscribe_orders(
+        &self,
+        condition_ids: Vec<String>,
+    ) -> Result<Pin<Box<dyn Stream<Item = std::result::Result<OrderEvent, WsError>> + Send>>> {
+        let stream = self.subscribe_user(condition_ids).await?;
+        Ok(Box::pin(stream.filter_map(user_filter!(UserEvent::Order))))
+    }
+
+    /// Subscribe and yield only `trade` events from the user channel.
+    pub async fn subscribe_trades(
+        &self,
+        condition_ids: Vec<String>,
+    ) -> Result<Pin<Box<dyn Stream<Item = std::result::Result<TradeEvent, WsError>> + Send>>> {
+        let stream = self.subscribe_user(condition_ids).await?;
+        Ok(Box::pin(stream.filter_map(user_filter!(UserEvent::Trade))))
     }
 }

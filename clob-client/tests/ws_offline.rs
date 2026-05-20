@@ -284,6 +284,136 @@ async fn client_clob_ws_requires_ws_endpoint() {
 }
 
 #[tokio::test]
+async fn typed_orderbook_helper_filters_to_book_frames_only() {
+    // Server pushes one book frame followed by a last_trade_price frame. The orderbook
+    // helper should yield exactly one item.
+    let book_frame = r#"{
+        "event_type": "book",
+        "data": {
+            "market": "0xmarket",
+            "asset_id": "asset-1",
+            "bids": [{"price": "0.4", "size": "10"}],
+            "asks": [{"price": "0.6", "size": "20"}],
+            "timestamp": 1700000000,
+            "hash": "0xdead"
+        }
+    }"#
+    .to_owned();
+    let last_trade_frame = r#"{
+        "event_type": "last_trade_price",
+        "data": {
+            "asset_id": "asset-1",
+            "market": "0xmarket",
+            "price": "0.5",
+            "size": "1",
+            "fee_rate_bps": "10",
+            "side": "BUY",
+            "timestamp": 1700000000,
+            "transaction_hash": ""
+        }
+    }"#
+    .to_owned();
+
+    let (url, _) = spin_server(vec![book_frame, last_trade_frame]).await;
+    let ws = build_ws_client(url, None);
+    let mut stream = ws
+        .subscribe_orderbook(vec!["asset-1".into()], MarketSubscribeOpts::default())
+        .await
+        .unwrap();
+
+    let first = tokio::time::timeout(Duration::from_secs(2), stream.next())
+        .await
+        .expect("first event arrives")
+        .expect("stream not closed")
+        .expect("decoded ok");
+    assert_eq!(first.asset_id, "asset-1");
+    assert_eq!(first.bids[0].price, "0.4");
+
+    // The last_trade_price frame should be filtered out — next() should pend.
+    let next = tokio::time::timeout(Duration::from_millis(150), stream.next()).await;
+    assert!(
+        next.is_err(),
+        "typed orderbook stream should not yield non-book frames; got: {next:?}"
+    );
+}
+
+#[tokio::test]
+async fn typed_midpoints_helper_computes_midpoint_from_book() {
+    let book = r#"{
+        "event_type": "book",
+        "data": {
+            "market": "0xm",
+            "asset_id": "a",
+            "bids": [{"price": "0.40", "size": "1"}],
+            "asks": [{"price": "0.60", "size": "1"}],
+            "timestamp": 1,
+            "hash": ""
+        }
+    }"#
+    .to_owned();
+    let (url, _) = spin_server(vec![book]).await;
+    let ws = build_ws_client(url, None);
+    let mut stream = ws
+        .subscribe_midpoints(vec!["a".into()], MarketSubscribeOpts::default())
+        .await
+        .unwrap();
+    let mid = tokio::time::timeout(Duration::from_secs(2), stream.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(mid.midpoint.to_string(), "0.50");
+}
+
+#[tokio::test]
+async fn typed_trades_helper_filters_user_channel_to_trades_only() {
+    let order_frame = r#"{
+        "event_type": "order",
+        "data": {
+            "id": "0xorder",
+            "status": "ORDER_STATUS_LIVE",
+            "asset_id": "1",
+            "side": "BUY",
+            "original_size": "10",
+            "size_matched": "0",
+            "price": "0.5",
+            "type": "GTC"
+        }
+    }"#
+    .to_owned();
+    let trade_frame = r#"{
+        "event_type": "trade",
+        "data": {
+            "id": "0xtrade",
+            "status": "MATCHED",
+            "asset_id": "1",
+            "side": "BUY",
+            "size": "5",
+            "price": "0.09",
+            "match_type": "MINT",
+            "order_id": "0xorder"
+        }
+    }"#
+    .to_owned();
+    let (url, _) = spin_server(vec![order_frame, trade_frame]).await;
+
+    let creds = Credentials::new(
+        Uuid::nil(),
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".into(),
+        "pass-1".into(),
+    );
+    let ws = build_ws_client(url, Some(creds));
+    let mut stream = ws.subscribe_trades(vec!["0xcid".into()]).await.unwrap();
+    let trade = tokio::time::timeout(Duration::from_secs(2), stream.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(trade.id, "0xtrade");
+    assert_eq!(trade.match_type, "MINT");
+}
+
+#[tokio::test]
 async fn subscribe_user_without_credentials_errors() {
     let client = Client::builder()
         .endpoints(

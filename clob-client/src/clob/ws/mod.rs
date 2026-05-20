@@ -13,11 +13,12 @@ pub mod client;
 pub mod subscription;
 pub mod types;
 
-pub use client::{ClobWebSocketClient, MarketSubscribeOpts};
+pub use client::{ClobWebSocketClient, MarketSubscribeOpts, MidpointUpdate};
 pub use subscription::{MarketStream, UserStream};
 pub use types::request::{MarketLevel, MarketSubscribeRequest, UserSubscribeRequest};
 pub use types::response::{
-    BestBidAskEvent, BookEvent, MakerOrderFill, MarketEvent, MarketResolvedEvent, NewMarketEvent,
-    OrderEvent, OrderLevel, OrderSide, OrderStatus, OrderSubType, PriceChangeEntry,
-    PriceChangeEvent, TickSizeChangeEvent, TradeEvent, TradeStatus, TraderSide, UserEvent,
+    BestBidAskEvent, BookEvent, LastTradePriceEvent, MakerOrderFill, MarketEvent,
+    MarketResolvedEvent, NewMarketEvent, OrderEvent, OrderLevel, OrderSide, OrderStatus,
+    OrderSubType, PriceChangeEntry, PriceChangeEvent, TickSizeChangeEvent, TradeEvent, TradeStatus,
+    TraderSide, UserEvent,
 };
