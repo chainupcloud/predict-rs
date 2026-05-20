@@ -72,6 +72,56 @@ sol! {
     }
 }
 
+sol! {
+    /// EIP-712 struct for a Gnosis Safe transaction. Field order matches Safe v1.3 exactly
+    /// — `services/relayer-service` and the front-end signing code at
+    /// `apps/user-dapp/src/hooks/useSetupSteps.ts:543` both depend on this layout.
+    #[derive(Debug)]
+    struct SafeTx {
+        address to;
+        uint256 value;
+        bytes   data;
+        uint8   operation;
+        uint256 safeTxGas;
+        uint256 baseGas;
+        uint256 gasPrice;
+        address gasToken;
+        address refundReceiver;
+        uint256 nonce;
+    }
+}
+
+/// EIP-712 domain for a Safe meta-tx — no `name`, no `version`, just `chainId` +
+/// `verifyingContract` (the Safe address). This is the Safe v1.3 convention.
+fn safe_tx_domain(chain_id: u64, safe: Address) -> Eip712Domain {
+    Eip712Domain {
+        name: None,
+        version: None,
+        chain_id: Some(U256::from(chain_id)),
+        verifying_contract: Some(safe),
+        salt: None,
+    }
+}
+
+/// Compute the 32-byte SafeTx EIP-712 digest for the given Safe address.
+#[must_use]
+pub fn safe_tx_digest(tx: &crate::safe::SafeTransaction, safe: Address, chain_id: u64) -> B256 {
+    let domain = safe_tx_domain(chain_id, safe);
+    let sol = SafeTx {
+        to: tx.to,
+        value: tx.value,
+        data: tx.data.clone().into(),
+        operation: tx.operation as u8,
+        safeTxGas: tx.safe_tx_gas,
+        baseGas: tx.base_gas,
+        gasPrice: tx.gas_price,
+        gasToken: tx.gas_token,
+        refundReceiver: tx.refund_receiver,
+        nonce: tx.nonce,
+    };
+    sol.eip712_signing_hash(&domain)
+}
+
 /// Plain-data Order used by callers (free of alloy's sol! generated type, easier for FFI / serde).
 #[derive(Debug, Clone)]
 pub struct OrderForSigning {
@@ -289,6 +339,24 @@ impl PMCup26Signer {
         let sig = self.sign_digest(digest)?;
         Ok(signature_to_bytes(sig))
     }
+
+    /// Sign a Gnosis Safe transaction and return a 65-byte `r||s||v` signature with `v`
+    /// in `{0x1b, 0x1c}` (Safe's on-chain verifier requires Ethereum-style v, not the
+    /// `{0, 1}` recovery-id convention `pm-sdk-go` uses for ClobAuth / Order).
+    ///
+    /// The `safe` argument is the Safe address — used as the `verifyingContract` of the
+    /// SafeTx EIP-712 domain, NOT the signer's own address. The signer (this struct's
+    /// underlying EOA) must be a recognised owner of that Safe for the signature to be
+    /// accepted by `Safe.execTransaction`.
+    pub fn sign_safe_tx(
+        &self,
+        safe: Address,
+        tx: &crate::safe::SafeTransaction,
+    ) -> Result<[u8; 65]> {
+        let digest = safe_tx_digest(tx, safe, self.chain_id);
+        let sig = self.sign_digest(digest)?;
+        Ok(signature_to_bytes_ethereum_v(sig))
+    }
 }
 
 /// Serialize a 65-byte signature in `r || s || v` order, where `v` is the recovery id
@@ -303,6 +371,15 @@ fn signature_to_bytes(sig: Signature) -> [u8; 65] {
     out[..32].copy_from_slice(&r.to_be_bytes::<32>());
     out[32..64].copy_from_slice(&s.to_be_bytes::<32>());
     out[64] = u8::from(sig.v());
+    out
+}
+
+/// Like [`signature_to_bytes`] but with `v` shifted into the Ethereum convention
+/// (`{0x1b, 0x1c}` = 27/28). Required by Safe.execTransaction's on-chain verifier
+/// (`Safe.checkSignatures` calls `ecrecover` which expects 27/28).
+fn signature_to_bytes_ethereum_v(sig: Signature) -> [u8; 65] {
+    let mut out = signature_to_bytes(sig);
+    out[64] += 27;
     out
 }
 
@@ -353,5 +430,45 @@ mod tests {
             scopeId: B256::ZERO,
         };
         assert_eq!(zero_order.eip712_type_hash(), want);
+    }
+
+    #[test]
+    fn safe_tx_type_hash_matches_literal() {
+        // The on-chain Safe v1.3 SafeTx type-hash is:
+        //   keccak256("SafeTx(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 nonce)")
+        let want = keccak256(
+            "SafeTx(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 nonce)",
+        );
+        let zero = SafeTx {
+            to: Address::ZERO,
+            value: U256::ZERO,
+            data: alloy::primitives::Bytes::new(),
+            operation: 0,
+            safeTxGas: U256::ZERO,
+            baseGas: U256::ZERO,
+            gasPrice: U256::ZERO,
+            gasToken: Address::ZERO,
+            refundReceiver: Address::ZERO,
+            nonce: U256::ZERO,
+        };
+        assert_eq!(zero.eip712_type_hash(), want);
+    }
+
+    #[test]
+    fn sign_safe_tx_produces_ethereum_v_byte() {
+        // Round-trip: build a deterministic SafeTransaction, sign, check v is 27 or 28.
+        let signer = PMCup26Signer::from_hex(
+            "0x4242424242424242424242424242424242424242424242424242424242424242",
+            143,
+        )
+        .unwrap();
+        let safe = Address::ZERO; // verifyingContract for the test
+        let tx = crate::safe::SafeTransaction::call(
+            Address::ZERO,
+            vec![0x01, 0x02, 0x03],
+            U256::ZERO,
+        );
+        let sig = signer.sign_safe_tx(safe, &tx).unwrap();
+        assert!(sig[64] == 27 || sig[64] == 28, "expected Ethereum v {{27,28}}, got {}", sig[64]);
     }
 }

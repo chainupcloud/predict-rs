@@ -18,6 +18,7 @@ pub mod data;
 pub mod endpoints;
 pub mod error;
 pub mod gamma;
+pub mod safe;
 pub mod signer;
 pub mod types;
 pub mod ws;
