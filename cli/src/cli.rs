@@ -138,8 +138,9 @@ pub enum Command {
     /// Guided first-time setup wizard (wallet + tenant + Safe + L2 API key).
     /// Mirrors `polymarket setup`, adapted for chainup's multi-tenant topology.
     Setup,
-    /// Conditional Token Framework helpers (`condition-id` / `position-id` —
-    /// pure off-chain calculations; on-chain `split / merge / redeem` to follow).
+    /// Conditional Token Framework helpers — pure off-chain ID calculations
+    /// (`condition-id` / `position-id`), RPC-backed `collection-id`, and Safe-mode
+    /// on-chain writes (`redeem` / `split` / `merge`) via the chainup relayer.
     Ctf(crate::ctf_commands::CtfArgs),
 }
 

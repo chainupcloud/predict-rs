@@ -14,7 +14,9 @@
 use std::str::FromStr;
 use std::time::Duration;
 
-use alloy::primitives::{Address, U256, keccak256};
+use alloy::primitives::{Address, B256, U256, keccak256};
+use alloy::providers::ProviderBuilder;
+use alloy::sol;
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Subcommand};
 use pm_rs_clob_client::safe::SafeTransaction;
@@ -40,6 +42,10 @@ pub enum CtfCmd {
     /// Pure function — no RPC. Formula:
     /// `keccak256(abi.encodePacked(collateralToken, collectionId))`.
     PositionId(PositionIdArgs),
+    /// Resolve a CTF `collectionId` via `CTF.getCollectionId(parent, condition, indexSet)`.
+    /// Requires an RPC endpoint because Gnosis CTF's algorithm uses alt_bn128 EC point
+    /// addition which is not yet implemented locally.
+    CollectionId(CollectionIdArgs),
     /// Redeem winning outcome tokens — `redeemPositions(collateral, parentCollectionId,
     /// conditionId, indexSets)`. Safe-mode via the chainup relayer-service. Defaults to
     /// dry-run; pass `--execute` to actually submit. Only succeeds after the condition
@@ -75,6 +81,29 @@ pub struct PositionIdArgs {
     /// "Yes" collection is the conditionId itself when the parent collection is zero.
     #[arg(long)]
     pub collection: String,
+}
+
+#[derive(Debug, Args)]
+pub struct CollectionIdArgs {
+    /// Path to the tenant network YAML — supplies `network.rpc_url` and
+    /// `contracts.conditional_tokens` defaults.
+    #[arg(long)]
+    pub network_config: String,
+    /// Parent collection id (`bytes32`). Default zero = top-level condition.
+    #[arg(long, default_value = "0x0000000000000000000000000000000000000000000000000000000000000000")]
+    pub parent_collection_id: String,
+    /// Condition id (`bytes32`).
+    #[arg(long)]
+    pub condition_id: String,
+    /// Outcome index set (uint256). Binary "Yes" = 1, binary "No" = 2.
+    #[arg(long)]
+    pub index_set: String,
+    /// Override the YAML's `network.rpc_url`.
+    #[arg(long)]
+    pub rpc_url: Option<String>,
+    /// Override `contracts.conditional_tokens` from the YAML.
+    #[arg(long)]
+    pub contract: Option<String>,
 }
 
 /// Shared fields for the three Safe-mode CTF write commands. Captured in a struct so the
@@ -166,6 +195,7 @@ pub async fn run(args: &Cli, ctf_args: CtfArgs, fmt: Format) -> Result<()> {
             let id = position_id(&a.collateral, &a.collection)?;
             output::print_scalar("position_id", format!("0x{}", hex::encode(id)), fmt)
         }
+        CtfCmd::CollectionId(a) => run_collection_id(&a, fmt).await,
         CtfCmd::Redeem(a) => run_redeem(args, &a, fmt).await,
         CtfCmd::Split(a) => run_split(args, &a, fmt).await,
         CtfCmd::Merge(a) => run_merge(args, &a, fmt).await,
@@ -529,6 +559,55 @@ async fn run_split_or_merge(
         )
         .await?;
     safe_exec::print_plan(&plan, fmt, false, Some(safe_exec::final_state_json(&final_tx)))
+}
+
+// ─── pm ctf collection-id (RPC fallback) ───────────────────────────────
+
+sol! {
+    #[sol(rpc)]
+    interface IConditionalTokens {
+        function getCollectionId(
+            bytes32 parentCollectionId,
+            bytes32 conditionId,
+            uint256 indexSet
+        ) external view returns (bytes32);
+    }
+}
+
+async fn run_collection_id(a: &CollectionIdArgs, fmt: Format) -> Result<()> {
+    let cfg = network_config::load(&a.network_config)?;
+    let parent = parse_bytes32(&a.parent_collection_id).context("invalid --parent-collection-id")?;
+    let condition = parse_bytes32(&a.condition_id).context("invalid --condition-id")?;
+    let index_set = parse_amount_u256(&a.index_set).context("invalid --index-set")?;
+
+    let ctf_addr = if let Some(s) = &a.contract {
+        Address::from_str(s.trim())
+            .map_err(|e| anyhow!("invalid --contract '{s}': {e}"))?
+    } else {
+        let raw = cfg.contracts.conditional_tokens.as_deref().ok_or_else(|| {
+            anyhow!(
+                "network config has no `contracts.conditional_tokens` — pass --contract <addr>"
+            )
+        })?;
+        Address::from_str(raw).with_context(|| format!("invalid conditional_tokens '{raw}'"))?
+    };
+
+    let rpc_raw = a.rpc_url.clone().unwrap_or_else(|| cfg.network.rpc_url.clone());
+    let rpc_url = url::Url::parse(&rpc_raw)
+        .with_context(|| format!("invalid rpc_url '{rpc_raw}'"))?;
+    let provider = ProviderBuilder::new().connect_http(rpc_url);
+    let ctf = IConditionalTokens::new(ctf_addr, provider);
+    let result: B256 = ctf
+        .getCollectionId(parent.into(), condition.into(), index_set)
+        .call()
+        .await
+        .with_context(|| format!("CTF.getCollectionId at {ctf_addr:?}"))?;
+
+    output::print_scalar(
+        "collection_id",
+        format!("0x{}", hex::encode(result.0)),
+        fmt,
+    )
 }
 
 #[cfg(test)]
