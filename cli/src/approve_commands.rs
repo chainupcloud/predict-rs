@@ -19,7 +19,7 @@ use alloy::primitives::{Address, U256};
 use alloy::providers::ProviderBuilder;
 use alloy::sol;
 use anyhow::{Context, Result, anyhow, bail};
-use clap::{Args, Subcommand};
+use clap::{Args, Subcommand, ValueEnum};
 use pm_rs_clob_client::safe::multisend::SafeSubOp;
 use pm_rs_clob_client::safe::{self, SafeTransaction};
 
@@ -68,16 +68,34 @@ pub struct CheckArgs {
     pub rpc_url: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum AssetSet {
+    /// Only `USDW.approve(spender, amount)` ops.
+    Usdw,
+    /// Only `CTF.setApprovalForAll(operator, true)` ops.
+    Ctf,
+    /// Both USDW.approve and CTF.setApprovalForAll for every target — what a fresh
+    /// wallet needs to fully trade on chainup. Matches polymarket-V1's `set` defaults.
+    All,
+}
+
 #[derive(Debug, Args)]
 pub struct SetArgs {
     /// Path to the tenant network YAML. Schema matches `examples/networks/*.yaml`.
     #[arg(long)]
     pub network_config: String,
+    /// Which approvals to issue. `all` (default) = USDW.approve(target, MAX) +
+    /// CTF.setApprovalForAll(target, true) for every approval target — what a
+    /// fresh wallet needs to actually place orders. `usdw` / `ctf` limit the
+    /// batch to one asset.
+    #[arg(long, value_enum, default_value_t = AssetSet::All)]
+    pub asset: AssetSet,
     /// Single spender to approve. Default: every entry returned by `approval_targets()`
     /// (CtfExchange + NegRiskCtfExchange + NegRiskAdapter) bundled into one MultiSend.
     #[arg(long)]
     pub spender: Option<String>,
-    /// Amount in raw smallest unit. Use `MAX` for `uint256::MAX`. Default `MAX`.
+    /// USDW approve amount in raw smallest unit. Use `MAX` for `uint256::MAX`. Default
+    /// `MAX`. Ignored when `--asset ctf` (CTF approval is a boolean, not an amount).
     #[arg(long, default_value = "MAX")]
     pub amount: String,
     /// Actually submit the SafeTx. Without this flag the command runs in dry-run mode —
@@ -359,6 +377,40 @@ fn require_multisend(cfg: &NetworkConfig) -> Result<Address> {
     Address::from_str(raw).with_context(|| format!("invalid multi_send_address '{raw}'"))
 }
 
+fn require_conditional_tokens(cfg: &NetworkConfig) -> Result<Address> {
+    let raw = cfg.contracts.conditional_tokens.as_deref().ok_or_else(|| {
+        anyhow!(
+            "network config declares no `contracts.conditional_tokens` — required for CTF approvals"
+        )
+    })?;
+    Address::from_str(raw)
+        .with_context(|| format!("invalid conditional_tokens address '{raw}'"))
+}
+
+/// `setApprovalForAll(address operator, bool approved)` selector.
+const ERC1155_SET_APPROVAL_FOR_ALL_SELECTOR: [u8; 4] = [0xa2, 0x2c, 0xb4, 0x65];
+
+fn encode_set_approval_for_all(operator: Address, approved: bool) -> Vec<u8> {
+    let mut out = Vec::with_capacity(4 + 32 + 32);
+    out.extend_from_slice(&ERC1155_SET_APPROVAL_FOR_ALL_SELECTOR);
+    let mut op_pad = [0u8; 32];
+    op_pad[12..].copy_from_slice(operator.as_slice());
+    out.extend_from_slice(&op_pad);
+    let mut bool_pad = [0u8; 32];
+    if approved {
+        bool_pad[31] = 1;
+    }
+    out.extend_from_slice(&bool_pad);
+    out
+}
+
+/// One sub-operation in the planned batch, retained so we can render it for the user.
+struct PlannedOp {
+    summary: String,
+    detail: String,
+    sub_op: SafeSubOp,
+}
+
 async fn run_set(args: &Cli, a: &SetArgs, fmt: Format) -> Result<()> {
     let cfg = network_config::load(&a.network_config)?;
 
@@ -373,18 +425,52 @@ async fn run_set(args: &Cli, a: &SetArgs, fmt: Format) -> Result<()> {
         bail!("no spenders to approve");
     }
 
-    // 3. Build the SafeTransaction. One spender = direct Call to USDW.
-    //    N spenders = DelegateCall to MultiSend with N approve sub-ops.
+    // 3. Build the planned op list. Order: every USDW.approve op, then every
+    //    CTF.setApprovalForAll op. Order doesn't matter on-chain (each is idempotent and
+    //    sets independent state), but a stable order keeps the table output predictable.
+    let mut planned: Vec<PlannedOp> = Vec::with_capacity(spenders.len() * 2);
+    let amount_label = if amount == U256::MAX { "MAX".to_owned() } else { amount.to_string() };
+
+    let include_usdw = matches!(a.asset, AssetSet::Usdw | AssetSet::All);
+    let include_ctf = matches!(a.asset, AssetSet::Ctf | AssetSet::All);
+
+    if include_usdw {
+        for (name, sp) in &spenders {
+            planned.push(PlannedOp {
+                summary: format!("USDW.approve → {name} ({sp:#x})"),
+                detail: format!("approve({usdw_raw}, {amount_label})"),
+                sub_op: SafeSubOp::call(usdw, encode_approve(*sp, amount)),
+            });
+        }
+    }
+
+    if include_ctf {
+        let ctf_addr = require_conditional_tokens(&ctx.cfg)?;
+        for (name, op) in &spenders {
+            planned.push(PlannedOp {
+                summary: format!("CTF.setApprovalForAll → {name} ({op:#x})"),
+                detail: format!("setApprovalForAll(operator={op:#x}, true) on {ctf_addr:#x}"),
+                sub_op: SafeSubOp::call(ctf_addr, encode_set_approval_for_all(*op, true)),
+            });
+        }
+    }
+
+    if planned.is_empty() {
+        bail!("no ops produced — check --asset / --spender combination");
+    }
+
+    // 4. Wrap in SafeTransaction. Single op = direct Call; >1 op = DelegateCall to
+    //    MultiSend.
     let nonce = ctx.nonce().await?;
-    let (safe_tx, op_label) = if spenders.len() == 1 {
-        let data = encode_approve(spenders[0].1, amount);
-        (SafeTransaction::call(usdw, data, nonce), "call")
+    let (safe_tx, op_label) = if planned.len() == 1 {
+        let op = &planned[0];
+        (
+            SafeTransaction::call(op.sub_op.to, op.sub_op.data.clone(), nonce),
+            "call",
+        )
     } else {
         let multisend_addr = require_multisend(&ctx.cfg)?;
-        let sub_ops: Vec<SafeSubOp> = spenders
-            .iter()
-            .map(|(_name, sp)| SafeSubOp::call(usdw, encode_approve(*sp, amount)))
-            .collect();
+        let sub_ops: Vec<SafeSubOp> = planned.iter().map(|p| p.sub_op.clone()).collect();
         let packed = safe::multisend::encode(&sub_ops)
             .map_err(|e| anyhow!("multisend encode: {e}"))?;
         (
@@ -393,18 +479,11 @@ async fn run_set(args: &Cli, a: &SetArgs, fmt: Format) -> Result<()> {
         )
     };
 
-    // 4. Sign + assemble the SubmitRequest.
+    // 5. Sign + assemble the SubmitRequest + plan JSON.
     let req = ctx.build_submit_request(&safe_tx, "approve")?;
-
-    let amount_label = if amount == U256::MAX { "MAX".to_owned() } else { amount.to_string() };
-    let ops_json: Vec<serde_json::Value> = spenders
+    let ops_json: Vec<serde_json::Value> = planned
         .iter()
-        .map(|(name, addr)| {
-            serde_json::json!({
-                "summary": format!("{name} → {addr:#x}"),
-                "detail": format!("approve({usdw_raw}, {amount_label})"),
-            })
-        })
+        .map(|p| serde_json::json!({ "summary": p.summary, "detail": p.detail }))
         .collect();
     let plan = safe_exec::assemble_plan(
         "pm approve set",
@@ -415,7 +494,7 @@ async fn run_set(args: &Cli, a: &SetArgs, fmt: Format) -> Result<()> {
         &req,
     );
 
-    // 5. Dry-run prints + exits; execute submits + polls.
+    // 6. Dry-run prints + exits; execute submits + polls.
     if !a.execute {
         return safe_exec::print_plan(&plan, fmt, true, None);
     }
@@ -521,5 +600,38 @@ mod tests {
             format!("{addr:?}").to_lowercase(),
             "0xa238cbeb142c10ef7ad8442c6d1f9e89e07e7761"
         );
+    }
+
+    #[test]
+    fn require_conditional_tokens_returns_yaml_address() {
+        let cfg = network_config::load("../examples/networks/monad-hermestrade.yaml").unwrap();
+        let addr = require_conditional_tokens(&cfg).unwrap();
+        // The chainup Monad ConditionalTokens contract sourced from gamma /public-info.
+        assert_eq!(
+            format!("{addr:?}").to_lowercase(),
+            "0xd77d550092ab455bd1b9071e4185ecbb6e8d6a2a"
+        );
+    }
+
+    #[test]
+    fn encode_set_approval_for_all_matches_selector_and_padding() {
+        use alloy::primitives::keccak256;
+        let operator = Address::from_str("0x017641abFa4264121237023f9Fe678BF00F60De8").unwrap();
+        let data = encode_set_approval_for_all(operator, true);
+        assert_eq!(data.len(), 4 + 32 + 32);
+        // Selector golden-check against the literal signature.
+        let want_selector = &keccak256("setApprovalForAll(address,bool)".as_bytes()).0[..4];
+        assert_eq!(&data[..4], want_selector);
+        assert_eq!(&data[..4], &ERC1155_SET_APPROVAL_FOR_ALL_SELECTOR);
+        // Address slot padded left with 12 zero bytes.
+        assert!(data[4..16].iter().all(|b| *b == 0));
+        assert_eq!(&data[16..36], operator.as_slice());
+        // Boolean true → 32 bytes with only the last byte = 0x01.
+        assert!(data[36..67].iter().all(|b| *b == 0));
+        assert_eq!(data[67], 1);
+
+        // approved=false → all zeros after selector.
+        let data_off = encode_set_approval_for_all(operator, false);
+        assert!(data_off[36..68].iter().all(|b| *b == 0));
     }
 }
