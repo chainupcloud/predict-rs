@@ -40,7 +40,10 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
         return crate::setup_commands::run(&args).await;
     }
 
-    // `pm ctf` (current subcommands) are pure off-chain — no endpoint needed.
+    // `pm ctf` — mix of off-chain helpers (`condition-id`, `position-id`) and on-chain
+    // Safe-mode writes (`redeem` / `split` / `merge`). The on-chain variants use the
+    // network YAML supplied via `--network-config` so no CLOB endpoint is needed at the
+    // top level.
     if matches!(args.command, Command::Ctf(_)) {
         let mut owned = args;
         let fmt = owned.output;
@@ -48,7 +51,7 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
             Command::Ctf(c) => c,
             _ => unreachable!(),
         };
-        return crate::ctf_commands::run(cargs, fmt);
+        return crate::ctf_commands::run(&owned, cargs, fmt).await;
     }
 
     // `pm approve …` only touches the on-chain RPC — no CLOB endpoint required.

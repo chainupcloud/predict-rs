@@ -8,6 +8,7 @@ mod gamma_commands;
 mod network_config;
 mod order_commands;
 mod output;
+mod safe_exec;
 mod setup_commands;
 mod shell_commands;
 mod wallet_commands;

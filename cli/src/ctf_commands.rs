@@ -2,23 +2,27 @@
 //!
 //! Two flavours:
 //!
-//! - **Pure identifier calculations** (`condition-id`, `position-id`) — local keccak256 over
-//!   ABI-encoded inputs, no RPC required, no signer required. Mirror polymarket-cli's
-//!   `ctf condition-id` / `ctf position-id` but compute off-chain.
+//! - **Pure identifier calculations** (`condition-id`, `position-id`) — local keccak256
+//!   over ABI-encoded inputs, no RPC required, no signer required.
+//! - **On-chain Safe-mode operations** (`redeem`, `split`, `merge`) — build a SafeTx that
+//!   calls `ConditionalTokens` (or `NegRiskAdapter` via `--contract`) and submit via
+//!   chainup's relayer-service. Default dry-run; `--execute` actually submits.
 //!
-//! - **On-chain operations** (`split / merge / redeem`) — broadcast to the
-//!   `ConditionalTokens` contract. EOA-only for now (signatureType=0); Safe-mode is
-//!   blocked behind the same Safe `execTransaction` question as `pm approve set`. **Not yet
-//!   implemented in this commit** — types and CLI surface land first.
-//!
-//! `collection-id` requires elliptic-curve math (point addition over the alt-bn128 curve)
-//! per Gnosis CTF's spec, so it's deferred to a future commit and will require RPC fallback
-//! or a vendored EC implementation.
+//! `collection-id` requires alt_bn128 EC point addition per Gnosis CTF spec, so it's
+//! deferred to a future commit and will use an RPC fallback (`CTF.getCollectionId`).
 
-use anyhow::{Context, Result, anyhow};
+use std::str::FromStr;
+use std::time::Duration;
+
+use alloy::primitives::{Address, U256, keccak256};
+use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Subcommand};
+use pm_rs_clob_client::safe::SafeTransaction;
 
+use crate::cli::Cli;
+use crate::network_config::{self, NetworkConfig};
 use crate::output::{self, Format};
+use crate::safe_exec::{self, SafeContext};
 
 #[derive(Debug, Args)]
 pub struct CtfArgs {
@@ -36,6 +40,17 @@ pub enum CtfCmd {
     /// Pure function — no RPC. Formula:
     /// `keccak256(abi.encodePacked(collateralToken, collectionId))`.
     PositionId(PositionIdArgs),
+    /// Redeem winning outcome tokens — `redeemPositions(collateral, parentCollectionId,
+    /// conditionId, indexSets)`. Safe-mode via the chainup relayer-service. Defaults to
+    /// dry-run; pass `--execute` to actually submit. Only succeeds after the condition
+    /// has been resolved on-chain (i.e. `payoutNumerators` are non-zero).
+    Redeem(RedeemArgs),
+    /// Split USDW into a full set of outcome tokens — `splitPosition(collateral,
+    /// parentCollectionId, conditionId, partition, amount)`. Safe-mode via the relayer.
+    Split(SplitArgs),
+    /// Merge a full set of outcome tokens back into USDW — `mergePositions(collateral,
+    /// parentCollectionId, conditionId, partition, amount)`. Safe-mode via the relayer.
+    Merge(MergeArgs),
 }
 
 #[derive(Debug, Args)]
@@ -62,8 +77,87 @@ pub struct PositionIdArgs {
     pub collection: String,
 }
 
-pub fn run(args: CtfArgs, fmt: Format) -> Result<()> {
-    match args.command {
+/// Shared fields for the three Safe-mode CTF write commands. Captured in a struct so the
+/// per-command arg structs stay short.
+#[derive(Debug, Args)]
+pub struct CtfWriteCommon {
+    /// Path to the tenant network YAML.
+    #[arg(long)]
+    pub network_config: String,
+    /// Condition id, `0x...32bytes`. Output of `CTF.getConditionId` or `pm ctf condition-id`.
+    #[arg(long)]
+    pub condition_id: String,
+    /// Parent collection id, `0x...32bytes`. Defaults to the zero collection (top-level
+    /// condition with no parent). Set this for nested / linked conditions.
+    #[arg(long, default_value = "0x0000000000000000000000000000000000000000000000000000000000000000")]
+    pub parent_collection_id: String,
+    /// Override the CTF contract address used as the SafeTx target. Defaults to the YAML's
+    /// `contracts.conditional_tokens`. Pass `contracts.neg_risk_adapter` for neg-risk
+    /// markets that route through the adapter instead.
+    #[arg(long)]
+    pub contract: Option<String>,
+    /// Override the collateral token. Defaults to `contracts.usdw` from the YAML.
+    #[arg(long)]
+    pub collateral: Option<String>,
+    /// Override the YAML's `network.rpc_url` (used to read the Safe's `nonce()`).
+    #[arg(long)]
+    pub rpc_url: Option<String>,
+    /// Actually submit the SafeTx. Without this flag the command signs locally and prints
+    /// the `SubmitRequest` body but never POSTs.
+    #[arg(long)]
+    pub execute: bool,
+    /// Poll interval (seconds). Default 2 s.
+    #[arg(long, default_value_t = 2)]
+    pub poll_interval_secs: u64,
+    /// Polling deadline (seconds). Default 60 s.
+    #[arg(long, default_value_t = 60)]
+    pub poll_timeout_secs: u64,
+    /// EIP-712 LoginMessage `domain`. Defaults to `tenant.domain` from the YAML.
+    #[arg(long)]
+    pub gamma_domain: Option<String>,
+    /// EIP-712 LoginMessage `uri`. Defaults to `https://<tenant.domain>`.
+    #[arg(long)]
+    pub gamma_uri: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct RedeemArgs {
+    #[command(flatten)]
+    pub common: CtfWriteCommon,
+    /// Comma-separated winning index sets (uint256). Each is the bitmap of outcomes
+    /// claimed in one redeem call. Binary "Yes" = 1, binary "No" = 2; categorical with
+    /// 3 outcomes claiming the first = 1, second = 2, third = 4.
+    #[arg(long, value_delimiter = ',')]
+    pub index_sets: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct SplitArgs {
+    #[command(flatten)]
+    pub common: CtfWriteCommon,
+    /// Comma-separated partition uint256 entries. For a full split into a binary market:
+    /// `1,2`. For a categorical 3-way: `1,2,4`. Must sum to `(1 << outcomeSlotCount) - 1`.
+    #[arg(long, value_delimiter = ',')]
+    pub partition: Vec<String>,
+    /// Collateral amount in raw smallest unit (USDW has 6 decimals: 1 USDW = `1_000_000`).
+    #[arg(long)]
+    pub amount: String,
+}
+
+#[derive(Debug, Args)]
+pub struct MergeArgs {
+    #[command(flatten)]
+    pub common: CtfWriteCommon,
+    /// Comma-separated partition uint256 entries (see `split`).
+    #[arg(long, value_delimiter = ',')]
+    pub partition: Vec<String>,
+    /// Outcome-token amount to merge back into collateral (raw smallest unit).
+    #[arg(long)]
+    pub amount: String,
+}
+
+pub async fn run(args: &Cli, ctf_args: CtfArgs, fmt: Format) -> Result<()> {
+    match ctf_args.command {
         CtfCmd::ConditionId(a) => {
             let id = condition_id(&a.oracle, &a.question, a.outcomes)?;
             output::print_scalar("condition_id", format!("0x{}", hex::encode(id)), fmt)
@@ -72,6 +166,9 @@ pub fn run(args: CtfArgs, fmt: Format) -> Result<()> {
             let id = position_id(&a.collateral, &a.collection)?;
             output::print_scalar("position_id", format!("0x{}", hex::encode(id)), fmt)
         }
+        CtfCmd::Redeem(a) => run_redeem(args, &a, fmt).await,
+        CtfCmd::Split(a) => run_split(args, &a, fmt).await,
+        CtfCmd::Merge(a) => run_merge(args, &a, fmt).await,
     }
 }
 
@@ -130,6 +227,308 @@ fn parse_bytes32(s: &str) -> Result<[u8; 32]> {
     let mut out = [0u8; 32];
     out.copy_from_slice(&bytes);
     Ok(out)
+}
+
+// ─── Safe-mode write commands ──────────────────────────────────────────
+
+/// `redeemPositions(address,bytes32,bytes32,uint256[])` selector.
+fn redeem_positions_selector() -> [u8; 4] {
+    let h = keccak256("redeemPositions(address,bytes32,bytes32,uint256[])".as_bytes());
+    let mut out = [0u8; 4];
+    out.copy_from_slice(&h.0[..4]);
+    out
+}
+
+/// `splitPosition(address,bytes32,bytes32,uint256[],uint256)` selector.
+fn split_position_selector() -> [u8; 4] {
+    let h = keccak256("splitPosition(address,bytes32,bytes32,uint256[],uint256)".as_bytes());
+    let mut out = [0u8; 4];
+    out.copy_from_slice(&h.0[..4]);
+    out
+}
+
+/// `mergePositions(address,bytes32,bytes32,uint256[],uint256)` selector.
+fn merge_positions_selector() -> [u8; 4] {
+    let h = keccak256("mergePositions(address,bytes32,bytes32,uint256[],uint256)".as_bytes());
+    let mut out = [0u8; 4];
+    out.copy_from_slice(&h.0[..4]);
+    out
+}
+
+/// ABI-encode an `address` slot (left-zero-padded to 32 bytes).
+fn pad_address(addr: Address) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    out[12..].copy_from_slice(addr.as_slice());
+    out
+}
+
+fn encode_redeem_positions(
+    collateral: Address,
+    parent_collection_id: [u8; 32],
+    condition_id: [u8; 32],
+    index_sets: &[U256],
+) -> Vec<u8> {
+    let selector = redeem_positions_selector();
+    // Head: collateral (32) | parent (32) | condition (32) | offset-to-indexSets (32).
+    // Offset value = 4 head slots × 32 bytes = 0x80.
+    let mut out = Vec::with_capacity(4 + 32 * 5 + index_sets.len() * 32);
+    out.extend_from_slice(&selector);
+    out.extend_from_slice(&pad_address(collateral));
+    out.extend_from_slice(&parent_collection_id);
+    out.extend_from_slice(&condition_id);
+    out.extend_from_slice(&U256::from(0x80u64).to_be_bytes::<32>());
+    // Tail: length | elements.
+    out.extend_from_slice(&U256::from(index_sets.len()).to_be_bytes::<32>());
+    for v in index_sets {
+        out.extend_from_slice(&v.to_be_bytes::<32>());
+    }
+    out
+}
+
+fn encode_split_or_merge(
+    selector: [u8; 4],
+    collateral: Address,
+    parent_collection_id: [u8; 32],
+    condition_id: [u8; 32],
+    partition: &[U256],
+    amount: U256,
+) -> Vec<u8> {
+    // Head: collateral (32) | parent (32) | condition (32) | offset (32) | amount (32).
+    // Offset to partition = 5 head slots × 32 = 0xa0.
+    let mut out = Vec::with_capacity(4 + 32 * 6 + partition.len() * 32);
+    out.extend_from_slice(&selector);
+    out.extend_from_slice(&pad_address(collateral));
+    out.extend_from_slice(&parent_collection_id);
+    out.extend_from_slice(&condition_id);
+    out.extend_from_slice(&U256::from(0xa0u64).to_be_bytes::<32>());
+    out.extend_from_slice(&amount.to_be_bytes::<32>());
+    out.extend_from_slice(&U256::from(partition.len()).to_be_bytes::<32>());
+    for v in partition {
+        out.extend_from_slice(&v.to_be_bytes::<32>());
+    }
+    out
+}
+
+fn parse_u256_csv(values: &[String], field: &str) -> Result<Vec<U256>> {
+    if values.is_empty() {
+        bail!("--{field} requires at least one value");
+    }
+    let mut out = Vec::with_capacity(values.len());
+    for raw in values {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let parsed = if let Some(rest) =
+            trimmed.strip_prefix("0x").or_else(|| trimmed.strip_prefix("0X"))
+        {
+            U256::from_str_radix(rest, 16)
+                .map_err(|e| anyhow!("invalid hex {field} entry '{trimmed}': {e}"))?
+        } else {
+            U256::from_str_radix(trimmed, 10)
+                .map_err(|e| anyhow!("invalid {field} entry '{trimmed}': {e}"))?
+        };
+        out.push(parsed);
+    }
+    if out.is_empty() {
+        bail!("--{field} resolved to an empty list");
+    }
+    Ok(out)
+}
+
+fn parse_amount_u256(raw: &str) -> Result<U256> {
+    let trimmed = raw.trim();
+    if let Some(rest) = trimmed.strip_prefix("0x").or_else(|| trimmed.strip_prefix("0X")) {
+        return U256::from_str_radix(rest, 16)
+            .map_err(|e| anyhow!("invalid hex amount '{trimmed}': {e}"));
+    }
+    U256::from_str_radix(trimmed, 10).map_err(|e| anyhow!("invalid amount '{trimmed}': {e}"))
+}
+
+fn resolve_ctf_contract(cfg: &NetworkConfig, override_addr: Option<&str>) -> Result<Address> {
+    if let Some(s) = override_addr {
+        return Address::from_str(s.trim())
+            .map_err(|e| anyhow!("invalid --contract '{s}': {e}"));
+    }
+    let raw = cfg.contracts.conditional_tokens.as_deref().ok_or_else(|| {
+        anyhow!(
+            "network config has no `contracts.conditional_tokens` — pass --contract <addr> explicitly"
+        )
+    })?;
+    Address::from_str(raw)
+        .with_context(|| format!("invalid conditional_tokens address '{raw}'"))
+}
+
+fn resolve_collateral(cfg: &NetworkConfig, override_addr: Option<&str>) -> Result<Address> {
+    if let Some(s) = override_addr {
+        return Address::from_str(s.trim())
+            .map_err(|e| anyhow!("invalid --collateral '{s}': {e}"));
+    }
+    let raw = cfg.contracts.usdw.as_deref().or(cfg.contracts.collateral()).ok_or_else(|| {
+        anyhow!("network config declares no USDW / collateral (set `contracts.usdw`)")
+    })?;
+    Address::from_str(raw).with_context(|| format!("invalid collateral '{raw}'"))
+}
+
+async fn run_redeem(args: &Cli, a: &RedeemArgs, fmt: Format) -> Result<()> {
+    let cfg = network_config::load(&a.common.network_config)?;
+    let ctx = SafeContext::resolve(args, cfg, a.common.rpc_url.as_deref())?;
+
+    let condition_id_bytes = parse_bytes32(&a.common.condition_id)
+        .context("invalid --condition-id (expected 0x-prefixed 32-byte hex)")?;
+    let parent_bytes = parse_bytes32(&a.common.parent_collection_id)
+        .context("invalid --parent-collection-id")?;
+    let collateral = resolve_collateral(&ctx.cfg, a.common.collateral.as_deref())?;
+    let ctf = resolve_ctf_contract(&ctx.cfg, a.common.contract.as_deref())?;
+    let index_sets = parse_u256_csv(&a.index_sets, "index-sets")?;
+
+    let calldata = encode_redeem_positions(collateral, parent_bytes, condition_id_bytes, &index_sets);
+    let nonce = ctx.nonce().await?;
+    let safe_tx = SafeTransaction::call(ctf, calldata, nonce);
+    let req = ctx.build_submit_request(&safe_tx, "ctf-redeem")?;
+
+    let ops_json = vec![serde_json::json!({
+        "summary": format!("redeemPositions → {ctf:#x}"),
+        "detail": format!(
+            "collateral={collateral:#x} parent={} condition={} indexSets={:?}",
+            format!("0x{}", hex::encode(parent_bytes)),
+            format!("0x{}", hex::encode(condition_id_bytes)),
+            index_sets.iter().map(U256::to_string).collect::<Vec<_>>(),
+        ),
+    })];
+    let plan = safe_exec::assemble_plan("pm ctf redeem", &ctx, "call", nonce, ops_json, &req);
+
+    if !a.common.execute {
+        return safe_exec::print_plan(&plan, fmt, true, None);
+    }
+    let final_tx = ctx
+        .submit_and_poll(
+            &req,
+            a.common.gamma_domain.as_deref(),
+            a.common.gamma_uri.as_deref(),
+            Duration::from_secs(a.common.poll_interval_secs.max(1)),
+            Duration::from_secs(
+                a.common.poll_timeout_secs.max(a.common.poll_interval_secs).max(5),
+            ),
+        )
+        .await?;
+    safe_exec::print_plan(&plan, fmt, false, Some(safe_exec::final_state_json(&final_tx)))
+}
+
+async fn run_split(args: &Cli, a: &SplitArgs, fmt: Format) -> Result<()> {
+    run_split_or_merge(
+        args,
+        &a.common,
+        &a.partition,
+        &a.amount,
+        SplitOrMerge::Split,
+        fmt,
+    )
+    .await
+}
+
+async fn run_merge(args: &Cli, a: &MergeArgs, fmt: Format) -> Result<()> {
+    run_split_or_merge(
+        args,
+        &a.common,
+        &a.partition,
+        &a.amount,
+        SplitOrMerge::Merge,
+        fmt,
+    )
+    .await
+}
+
+#[derive(Debug, Clone, Copy)]
+enum SplitOrMerge {
+    Split,
+    Merge,
+}
+
+impl SplitOrMerge {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Split => "splitPosition",
+            Self::Merge => "mergePositions",
+        }
+    }
+    fn title(self) -> &'static str {
+        match self {
+            Self::Split => "pm ctf split",
+            Self::Merge => "pm ctf merge",
+        }
+    }
+    fn metadata(self) -> &'static str {
+        match self {
+            Self::Split => "ctf-split",
+            Self::Merge => "ctf-merge",
+        }
+    }
+    fn selector(self) -> [u8; 4] {
+        match self {
+            Self::Split => split_position_selector(),
+            Self::Merge => merge_positions_selector(),
+        }
+    }
+}
+
+async fn run_split_or_merge(
+    args: &Cli,
+    common: &CtfWriteCommon,
+    partition_raw: &[String],
+    amount_raw: &str,
+    kind: SplitOrMerge,
+    fmt: Format,
+) -> Result<()> {
+    let cfg = network_config::load(&common.network_config)?;
+    let ctx = SafeContext::resolve(args, cfg, common.rpc_url.as_deref())?;
+
+    let condition_id_bytes = parse_bytes32(&common.condition_id)
+        .context("invalid --condition-id (expected 0x-prefixed 32-byte hex)")?;
+    let parent_bytes = parse_bytes32(&common.parent_collection_id)
+        .context("invalid --parent-collection-id")?;
+    let collateral = resolve_collateral(&ctx.cfg, common.collateral.as_deref())?;
+    let ctf = resolve_ctf_contract(&ctx.cfg, common.contract.as_deref())?;
+    let partition = parse_u256_csv(partition_raw, "partition")?;
+    let amount = parse_amount_u256(amount_raw)?;
+
+    let calldata = encode_split_or_merge(
+        kind.selector(),
+        collateral,
+        parent_bytes,
+        condition_id_bytes,
+        &partition,
+        amount,
+    );
+    let nonce = ctx.nonce().await?;
+    let safe_tx = SafeTransaction::call(ctf, calldata, nonce);
+    let req = ctx.build_submit_request(&safe_tx, kind.metadata())?;
+
+    let ops_json = vec![serde_json::json!({
+        "summary": format!("{} → {ctf:#x}", kind.label()),
+        "detail": format!(
+            "collateral={collateral:#x} parent={} condition={} partition={:?} amount={}",
+            format!("0x{}", hex::encode(parent_bytes)),
+            format!("0x{}", hex::encode(condition_id_bytes)),
+            partition.iter().map(U256::to_string).collect::<Vec<_>>(),
+            amount,
+        ),
+    })];
+    let plan = safe_exec::assemble_plan(kind.title(), &ctx, "call", nonce, ops_json, &req);
+
+    if !common.execute {
+        return safe_exec::print_plan(&plan, fmt, true, None);
+    }
+    let final_tx = ctx
+        .submit_and_poll(
+            &req,
+            common.gamma_domain.as_deref(),
+            common.gamma_uri.as_deref(),
+            Duration::from_secs(common.poll_interval_secs.max(1)),
+            Duration::from_secs(common.poll_timeout_secs.max(common.poll_interval_secs).max(5)),
+        )
+        .await?;
+    safe_exec::print_plan(&plan, fmt, false, Some(safe_exec::final_state_json(&final_tx)))
 }
 
 #[cfg(test)]
@@ -209,5 +608,92 @@ mod tests {
             parse_bytes32("0x0000000000000000000000000000000000000000000000000000000000000001")
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn selectors_match_solidity_signatures() {
+        // The expected selectors are the canonical Gnosis CTF / NegRisk values — keccak
+        // of the full signature with leading 4 bytes.
+        let want_redeem = &keccak256(
+            "redeemPositions(address,bytes32,bytes32,uint256[])".as_bytes(),
+        ).0[..4];
+        let want_split = &keccak256(
+            "splitPosition(address,bytes32,bytes32,uint256[],uint256)".as_bytes(),
+        ).0[..4];
+        let want_merge = &keccak256(
+            "mergePositions(address,bytes32,bytes32,uint256[],uint256)".as_bytes(),
+        ).0[..4];
+        assert_eq!(&redeem_positions_selector(), want_redeem);
+        assert_eq!(&split_position_selector(), want_split);
+        assert_eq!(&merge_positions_selector(), want_merge);
+    }
+
+    #[test]
+    fn encode_redeem_positions_layout_matches_solidity_abi() {
+        // Two-outcome (Yes/No) market — redeem the Yes side only.
+        let collateral = Address::from_str("0xb7bD080Df56FA76ce6CA4fA737d47815f7F8e746").unwrap();
+        let mut cond = [0u8; 32];
+        cond[31] = 0xaa;
+        let parent = [0u8; 32];
+        let index_sets = vec![U256::from(1u64)];
+        let data = encode_redeem_positions(collateral, parent, cond, &index_sets);
+        // Layout: selector | collateral | parent | condition | offset=0x80 | length=1 | elem=1.
+        assert_eq!(&data[..4], &redeem_positions_selector());
+        assert!(data[4..16].iter().all(|b| *b == 0));
+        assert_eq!(&data[16..36], collateral.as_slice());
+        assert_eq!(&data[36..68], &parent);
+        assert_eq!(&data[68..100], &cond);
+        assert_eq!(U256::from_be_slice(&data[100..132]), U256::from(0x80u64));
+        assert_eq!(U256::from_be_slice(&data[132..164]), U256::from(1u64));
+        assert_eq!(U256::from_be_slice(&data[164..196]), U256::from(1u64));
+    }
+
+    #[test]
+    fn encode_split_layout_matches_solidity_abi() {
+        let collateral = Address::from_str("0xb7bD080Df56FA76ce6CA4fA737d47815f7F8e746").unwrap();
+        let cond = [0u8; 32];
+        let parent = [0u8; 32];
+        let partition = vec![U256::from(1u64), U256::from(2u64)];
+        let amount = U256::from(1_000_000u64);
+        let data = encode_split_or_merge(
+            split_position_selector(),
+            collateral,
+            parent,
+            cond,
+            &partition,
+            amount,
+        );
+        assert_eq!(&data[..4], &split_position_selector());
+        assert!(data[4..16].iter().all(|b| *b == 0));
+        assert_eq!(&data[16..36], collateral.as_slice());
+        assert_eq!(&data[36..68], &parent);
+        assert_eq!(&data[68..100], &cond);
+        // offset to partition array = 0xa0 (5 head slots).
+        assert_eq!(U256::from_be_slice(&data[100..132]), U256::from(0xa0u64));
+        // amount = 1_000_000.
+        assert_eq!(U256::from_be_slice(&data[132..164]), amount);
+        // partition length = 2, then 1, 2.
+        assert_eq!(U256::from_be_slice(&data[164..196]), U256::from(2u64));
+        assert_eq!(U256::from_be_slice(&data[196..228]), U256::from(1u64));
+        assert_eq!(U256::from_be_slice(&data[228..260]), U256::from(2u64));
+    }
+
+    #[test]
+    fn parse_u256_csv_accepts_decimal_and_hex_and_strips_empty() {
+        let out = parse_u256_csv(
+            &["1".into(), "0x02".into(), "  3  ".into(), "".into()],
+            "test",
+        )
+        .unwrap();
+        assert_eq!(out, vec![U256::from(1u64), U256::from(2u64), U256::from(3u64)]);
+        assert!(parse_u256_csv(&[], "test").is_err());
+        assert!(parse_u256_csv(&["nope".into()], "test").is_err());
+    }
+
+    #[test]
+    fn parse_amount_u256_accepts_hex_or_decimal() {
+        assert_eq!(parse_amount_u256("1000000").unwrap(), U256::from(1_000_000u64));
+        assert_eq!(parse_amount_u256("0xff").unwrap(), U256::from(0xffu64));
+        assert!(parse_amount_u256("blah").is_err());
     }
 }
