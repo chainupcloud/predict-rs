@@ -269,7 +269,7 @@ pub struct BalanceAllowanceResponse {
     pub locked: Option<String>,
 }
 
-// ─── Phase 2.2: order / trade / cancel wire types ───────────────────────────
+// ─── Order / trade / cancel wire types ───────────────────────────
 
 /// Time-in-force / order-type discriminator. Wire form is the bare string `GTC` / `GTD` /
 /// `FOK` / `FAK` (matches `services/clob-service/internal/shared/types.OrderType` and the

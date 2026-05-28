@@ -1,7 +1,7 @@
-# Orders (Phase 2.2)
+# Orders
 
-Phase 2.2 adds order construction, signing, submission, cancellation, and order / trade
-query endpoints to `pm-rs-clob-client` plus the matching `pm order …` / `pm trade …` CLI
+`pm-rs-clob-client` exposes order construction, signing, submission, cancellation, and
+order / trade query endpoints, plus the matching `pm order …` / `pm trade …` CLI
 subcommands.
 
 ## Lifecycle
@@ -80,8 +80,7 @@ With `signatureType = 2` (PolyGnosisSafe):
 - `signer` = EOA address (the private key holder, a 1-of-1 Safe owner).
 
 The SDK requires `.maker(<Safe address>)` to be set explicitly when
-`signature_type = PolyGnosisSafe`; client-side Safe-address derivation is a follow-up
-(see `PHASE2_NOTES.md` issue #4).
+`signature_type = PolyGnosisSafe`; client-side Safe-address derivation is a follow-up.
 
 For `signatureType = 0` (EOA) the SDK enforces `maker == signer` client-side.
 
@@ -193,6 +192,6 @@ pm ... heartbeat
 - The salt / fee-rate fields are still uint256 strings on the wire but the server accepts
   any decimal up to 78 digits (`clob_orders.salt VARCHAR(78)`); the SDK pins salt to
   `u64::masked_53_bits` per pm-sdk-go to keep numeric round-trips clean.
-- Phase 2.2 leaves Builder-program client-side flows out of scope; `GET /builder/trades`
-  is exposed (since it's just a query), `POST` paths using `PRED_BUILDER_*` headers are
-  not implemented yet — Phase 4 / on-demand.
+- Builder-program client-side flows are out of scope; `GET /builder/trades` is exposed
+  (since it's just a query), `POST` paths using `PRED_BUILDER_*` headers are not
+  implemented.

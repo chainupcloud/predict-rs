@@ -11,11 +11,18 @@ Cargo workspace, two member crates:
 
 ## Status
 
-**Phase 1** (done): workspace skeleton, signer verified byte-identical against `pm-sdk-go/pkg/signer/testdata/golden.json`, public CLOB REST surface (`ok`, `time`, `midpoint`, `price`, `spread`, `book`, `tick-size`, `fee-rate`, `last-trade`), matching CLI subcommands. 9/9 tests pass; 5/9 endpoints validated end-to-end against the dev server.
+Pre-1.0. The SDK and CLI are functionally complete against the dev backend on Monad (chainId 143) and OP Sepolia (chainId 11155420); the wire surface is live-tested but unstable. Expect minor breaking changes until a 1.0 tag lands.
 
-**Phase 2** (planned): L1 (EIP-712) + L2 (HMAC-SHA256) auth flow, API-key management, order placement and cancellation, balance/orders/trades.
+Shipped surface:
 
-**Phase 3** (planned): Gamma client (events / markets / tags), WebSocket market and user channels, interactive shell.
+- **Signer** — `ClobAuth` / `Order` / `SafeTx` / `LoginMessage` EIP-712 types, byte-identical against `pm-sdk-go/pkg/signer/testdata/golden.json` (golden test gates every change).
+- **Auth** — L1 EIP-712 challenge, L2 HMAC-SHA256, API-key CRUD.
+- **Orders** — limit / market / GTC / GTD / FOK / FAK / post-only, single + batch place / cancel / cancel-all / replace.
+- **Reads** — midpoint / price / spread / book / tick-size / fee-rate / last-trade + batch variants (≤ 500 ids).
+- **Gamma** — events / markets / tags / profiles (REST).
+- **WebSocket** — market + user channels with auto-reconnect.
+- **CTF** — `condition-id` / `position-id` / `collection-id` helpers; `split` / `merge` / `redeem` via Safe meta-tx through the relayer.
+- **Approvals** — `IERC20.allowance` + `IERC1155.isApprovedForAll` reads; `set` via Safe MultiSend through the relayer.
 
 ## Quick start
 
@@ -80,30 +87,15 @@ Upstream Polymarket clients (`rs-clob-client*`) cannot talk to `pm-cup2026` with
 ```
 pm-rs/
 ├── Cargo.toml              # workspace
+├── LICENSE
+├── README.md               # this file
 ├── CLAUDE.md
-├── docs/
-│   └── diff-vs-polymarket-v1.md
-├── clob-client/            # SDK crate (lib)
-│   ├── src/
-│   │   ├── lib.rs
-│   │   ├── error.rs
-│   │   ├── types.rs        # Address, Side, SignatureType, ScopeId
-│   │   ├── auth.rs         # Credentials, PRED_* header constants, L2 HMAC
-│   │   ├── signer.rs       # PMCup26 signer (ClobAuth + Order EIP-712)
-│   │   ├── client.rs       # Client + ClientBuilder
-│   │   └── clob/           # CLOB module: types + endpoint methods
-│   └── tests/
-│       ├── golden_signer.rs    # byte-level parity with pm-sdk-go
-│       └── fixtures/
-│           └── golden.json     # snapshot of pm-sdk-go's golden vectors
-└── cli/                    # CLI crate (bin: pm)
-    └── src/
-        ├── main.rs
-        ├── cli.rs
-        ├── commands.rs
-        └── output.rs       # table / json rendering
+├── docs/                   # auth-flow / orders / ws / gamma / wallet / diff-vs-polymarket-v1
+├── examples/networks/      # reference network YAMLs (Monad / OP Sepolia / …)
+├── clob-client/            # SDK crate (pm-rs-clob-client) — see clob-client/README.md
+└── cli/                    # CLI crate (pm-cli, binary: pm) — see cli/README.md
 ```
 
 ## License
 
-MIT
+MIT — see [`LICENSE`](LICENSE).

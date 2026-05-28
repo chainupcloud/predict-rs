@@ -53,7 +53,7 @@ Additional EVM networks will be added in the future.
 - ✅ `chain_id`, `exchange_address`, RPC URL, gas-token symbol all come from **runtime configuration**.
 - ✅ The CLI config file supports multiple `[networks.<name>]` sections with a `--network <name>` flag to switch.
 - ✅ Any method that interacts with chain-level constants takes them as explicit parameters; nothing is read from a global.
-- ✅ Examples directory ships `examples/op_sepolia.rs` and `examples/monad.rs` (planned for Phase 2+).
+- ✅ Reference network YAMLs live under `examples/networks/` (one file per network, e.g. `monad-hermestrade.yaml`).
 
 ### 3. Behavioral parity with pm-sdk-go
 
@@ -81,8 +81,9 @@ Full diff table: [`docs/diff-vs-polymarket-v1.md`](docs/diff-vs-polymarket-v1.md
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 1 | Workspace skeleton + signer (golden test passes) + public CLOB REST surface + 9 read-only CLI subcommands | Done |
-| 2 | L1 / L2 auth + create / cancel order + balance / orders / trades | Pending |
-| 3 | Gamma client + WebSocket subscriptions + interactive shell | Pending |
+| 2 | L1 / L2 auth + create / cancel order + balance / orders / trades | Done |
+| 3 | Gamma client + WebSocket subscriptions + interactive shell | Done |
+| 4 | Safe meta-tx writes via relayer: approvals, CTF split / merge / redeem | Done |
 
 ## Development conventions
 

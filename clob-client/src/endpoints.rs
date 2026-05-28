@@ -10,7 +10,7 @@
 //!   Wraps the `data-service` microservice.
 //!
 //! Construct an [`Endpoints`] from any of: explicit URLs, the canonical subdomain pattern
-//! (`Endpoints::from_tenant("hermestrade.xyz")`), or a single CLOB URL for Phase 1
+//! (`Endpoints::from_tenant("hermestrade.xyz")`), or a single CLOB URL for
 //! read-only flows (`Endpoints::clob_only(...)`).
 
 use url::Url;
@@ -24,7 +24,7 @@ pub struct Endpoints {
     pub gamma: Option<Url>,
     pub ws: Option<Url>,
     /// `data-api.<tenant>` — data-service (portfolio / trades / activity /
-    /// leaderboards). Optional because Phase 1 read-only flows don't need it; the
+    /// leaderboards). Optional because read-only flows don't need it; the
     /// data sub-client will surface a validation error if it's missing.
     pub data: Option<Url>,
     /// `relayer-api.<tenant>` — relayer-service (Safe meta-tx submission).
@@ -78,7 +78,7 @@ impl Endpoints {
         Ok(ep)
     }
 
-    /// CLOB-only — useful for Phase 1 read-only smoke tests where Gamma / WS / Data are not exercised.
+    /// CLOB-only — useful for read-only smoke tests where Gamma / WS / Data are not exercised.
     pub fn clob_only(clob: impl AsRef<str>) -> Result<Self> {
         Ok(Self {
             clob: parse(clob.as_ref())?,

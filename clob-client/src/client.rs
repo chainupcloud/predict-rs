@@ -1,13 +1,11 @@
 //! Top-level [`Client`] for the CLOB REST API.
 //!
-//! Phase 1 surface (public, no auth required):
+//! Public surface (no auth required):
 //!
 //! - [`Client::ok`] / [`Client::time`]
 //! - [`Client::midpoint`] / [`Client::price`] / [`Client::spread`]
 //! - [`Client::book`] (single-token order-book snapshot)
 //! - [`Client::tick_size`] / [`Client::fee_rate`] / [`Client::last_trade_price`]
-//!
-//! Authenticated trading endpoints land in Phase 2 (see `pm-rs` README).
 //!
 //! Multi-endpoint configuration mirrors `pm-sdk-go`'s `WithEndpoints(clob, gamma, ws)`:
 //!
@@ -87,7 +85,7 @@ struct Inner {
 }
 
 impl Client {
-    /// Convenience: build a client with only a CLOB endpoint set (Phase 1 read-only).
+    /// Convenience: build a client with only a CLOB endpoint set (read-only).
     pub fn new(clob_endpoint: impl AsRef<str>) -> Result<Self> {
         ClientBuilder::new().clob_endpoint(clob_endpoint).build()
     }
@@ -104,13 +102,13 @@ impl Client {
         &self.inner.endpoints.clob
     }
 
-    /// Gamma base URL (Phase 3).
+    /// Gamma base URL.
     #[must_use]
     pub fn gamma_url(&self) -> Option<&Url> {
         self.inner.endpoints.gamma.as_ref()
     }
 
-    /// WebSocket base URL (Phase 3).
+    /// WebSocket base URL.
     #[must_use]
     pub fn ws_url(&self) -> Option<&Url> {
         self.inner.endpoints.ws.as_ref()
@@ -128,7 +126,7 @@ impl Client {
         self.inner.endpoints.relayer.as_ref()
     }
 
-    /// Configured chain id (None if the caller did not set one — Phase 1 read-only flows don't need it).
+    /// Configured chain id (None if the caller did not set one — read-only flows don't need it).
     #[must_use]
     pub fn chain_id(&self) -> Option<u64> {
         self.inner.chain_id
@@ -358,7 +356,7 @@ impl Client {
             .await
     }
 
-    // ─── Phase 2.x: batch reads (POST with JSON-array body) ────
+    // ─── Batch reads (POST with JSON-array body) ────
 
     /// Batch midpoints — `POST /midpoints`. Body: `[{"token_id": "..."}, ...]`. Returns a
     /// map `token_id -> midpoint-as-string`.
@@ -494,7 +492,7 @@ impl Client {
         Ok(parsed)
     }
 
-    // ─── Phase 2.1: L1 auth — API key CRUD ──────────────────────────────
+    // ─── L1 auth — API key CRUD ──────────────────────────────
 
     /// Idempotent: try `POST /auth/api-key` first; on any 4xx response fall back to
     /// `GET /auth/derive-api-key`. Mirrors `rs-clob-client`'s
@@ -574,7 +572,7 @@ impl Client {
         Ok(())
     }
 
-    // ─── Phase 2.1: L2 auth — read methods ──────────────────────────────
+    // ─── L2 auth — read methods ──────────────────────────────
 
     /// `GET /auth/api-keys` — list active API keys + `proxy_wallet` for the
     /// authenticated address. Requires [`ClientBuilder::credentials`] + [`ClientBuilder::chain_id`].
@@ -671,7 +669,7 @@ impl Client {
         Ok(req.send().await?)
     }
 
-    // ─── Phase 2.2: order / trade endpoints ─────────────────────────────
+    // ─── Order / trade endpoints ─────────────────────────────
 
     /// Begin building a limit order. Returns an [`OrderBuilder`] in the [`Limit`] state.
     ///
@@ -1042,7 +1040,7 @@ impl Client {
         &self.inner.http
     }
 
-    // ─── Phase 3b: WebSocket sub-client ─────────────────────────────────
+    // ─── WebSocket sub-client ─────────────────────────────────
 
     /// Construct a [`crate::clob::ws::ClobWebSocketClient`] bound to this
     /// client's WS endpoint and (optionally) L2 credentials.
@@ -1143,7 +1141,7 @@ impl ClientBuilder {
         Ok(self)
     }
 
-    /// Set the CLOB REST URL only (Gamma / WS unset). Phase 1 convenience.
+    /// Set the CLOB REST URL only (Gamma / WS unset).
     #[must_use]
     pub fn clob_endpoint(mut self, clob: impl AsRef<str>) -> Self {
         // Preserve any previously-set gamma/ws so callers can chain individual setters.
@@ -1161,7 +1159,7 @@ impl ClientBuilder {
         self
     }
 
-    /// Set the Gamma REST URL (Phase 3).
+    /// Set the Gamma REST URL.
     #[must_use]
     pub fn gamma_endpoint(mut self, gamma: impl AsRef<str>) -> Self {
         if let Some(ref mut ep) = self.endpoints
@@ -1172,7 +1170,7 @@ impl ClientBuilder {
         self
     }
 
-    /// Set the WebSocket URL (Phase 3).
+    /// Set the WebSocket URL.
     #[must_use]
     pub fn ws_endpoint(mut self, ws: impl AsRef<str>) -> Self {
         if let Some(ref mut ep) = self.endpoints
@@ -1183,7 +1181,7 @@ impl ClientBuilder {
         self
     }
 
-    /// Configure chain id. Required for signing flows (Phase 2+); Phase 1 read-only paths don't need it.
+    /// Configure chain id. Required for signing flows; read-only paths don't need it.
     #[must_use]
     pub fn chain_id(mut self, chain_id: u64) -> Self {
         self.chain_id = Some(chain_id);
@@ -1204,7 +1202,7 @@ impl ClientBuilder {
         self
     }
 
-    /// L2 credentials (Phase 2).
+    /// L2 credentials.
     #[must_use]
     pub fn credentials(mut self, creds: Credentials) -> Self {
         self.credentials = Some(creds);

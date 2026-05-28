@@ -24,7 +24,7 @@ cargo build --release
 install -m 0755 target/release/pm ~/.local/bin/pm
 ```
 
-Requires Rust 1.80+ (`rust-toolchain.toml` pins the exact version used by the CI build).
+Requires Rust 1.88+ (pinned via `rust-version` in the workspace `Cargo.toml`).
 
 ## Quick start
 
@@ -423,4 +423,4 @@ Or set `PM_OUTPUT=json` once and forget about it.
 
 ## License
 
-Apache-2.0. See `LICENSE` at the repo root.
+MIT — see [`LICENSE`](../LICENSE) at the repo root.

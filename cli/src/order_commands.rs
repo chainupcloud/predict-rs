@@ -1,4 +1,4 @@
-//! `pm order …` and `pm trade …` subcommand wiring (Phase 2.2).
+//! `pm order …` and `pm trade …` subcommand wiring.
 //!
 //! Maps the user-facing clap structs to the SDK's [`pm_rs_clob_client::OrderBuilder`] +
 //! `Client::post_order` / `Client::cancel_*` / `Client::open_orders` / `Client::trades`

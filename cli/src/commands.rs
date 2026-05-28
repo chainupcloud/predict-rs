@@ -71,7 +71,7 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
         builder = builder.chain_id(cid);
     }
 
-    // The unauthenticated client is used for every Phase 1 read path and for L1 auth
+    // The unauthenticated client is used for every read path and for L1 auth
     // (POST/GET /auth/api-key); L2 paths re-build a client with credentials attached.
     let client = builder.build().context("build client")?;
     let fmt = args.output;
@@ -231,7 +231,7 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
     Ok(())
 }
 
-// ─── Phase 2.1: auth / balance dispatch ─────────────────────────────────
+// ─── Auth / balance dispatch ─────────────────────────────────
 
 async fn run_auth(args: &Cli, sub: &AuthCommand, fmt: Format) -> anyhow::Result<()> {
     match sub {
@@ -239,7 +239,7 @@ async fn run_auth(args: &Cli, sub: &AuthCommand, fmt: Format) -> anyhow::Result<
             let signer = signer_from_args(args)?;
             let client = build_l1_client(args)?;
             let CreateKeyArgs { nonce, funder } = a;
-            let _ = funder; // accepted for forward compatibility (Phase 2.2)
+            let _ = funder; // accepted for forward compatibility
             let creds = client.create_api_key(&signer, Some(*nonce)).await?;
             print_credentials(&creds, fmt)?;
         }

@@ -1,6 +1,6 @@
-# pm-rs auth flow (Phase 2.1)
+# pm-rs auth flow
 
-This document describes the L1 (EIP-712) and L2 (HMAC-SHA256) authentication used by `pm-rs-clob-client` Phase 2.1, including the Safe-wallet derivation note.
+This document describes the L1 (EIP-712) and L2 (HMAC-SHA256) authentication used by `pm-rs-clob-client`, including the Safe-wallet derivation note.
 
 Authoritative server-side references:
 - `pm-cup2026/services/clob-service/internal/tradingapi/handlers/auth.go` — L1 verification.
@@ -107,12 +107,10 @@ client                                                              server
 - `signer` (the L1 signer that produces EIP-712 signatures) is the Safe owner EOA.
 - The Safe address is **deterministic**: CREATE2-derived by `SafeProxyFactory` with `salt = keccak256(abi.encode(signer, scopeId))`.
 
-For Phase 2.1 the SDK does NOT compute the Safe address client-side. Two consequences:
+The SDK does NOT compute the Safe address client-side. Two consequences:
 
 1. `Client::balance_allowance` returns the **Safe wallet's** balance — the server derives the Safe address from `EOA + scopeId` and reads its on-chain balance. The SDK only sends `PRED_ADDRESS = EOA`; the server does the lookup.
 2. `Client::api_keys` returns `proxy_wallet` (the Safe address) as part of the response so downstream callers know which address actually holds funds.
-
-A future client-side `derive_safe_address(signer, scope_id, factory_contract)` helper is tracked under Phase 2.2.
 
 ---
 

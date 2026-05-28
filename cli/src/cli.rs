@@ -26,16 +26,16 @@ pub struct Cli {
     #[arg(long, global = true, env = "PM_WS_ENDPOINT")]
     pub ws_endpoint: Option<String>,
 
-    /// Multi-tenant `scopeId` (`bytes32` hex). Empty = no scope. Threaded through signing flows in Phase 2+.
+    /// Multi-tenant `scopeId` (`bytes32` hex). Empty = no scope. Threaded through signing flows.
     #[arg(long, global = true, env = "PM_SCOPE_ID", default_value = "")]
     pub scope_id: String,
 
-    /// Chain id for signing. Required by Phase 2+ flows; Phase 1 read-only commands ignore it.
+    /// Chain id for signing. Required by signing flows; read-only commands ignore it.
     #[arg(long, global = true, env = "PM_CHAIN_ID")]
     pub chain_id: Option<u64>,
 
     /// EOA private key (hex, with or without `0x` prefix) used to sign L1 EIP-712 challenges.
-    /// Required by every Phase 2 subcommand. Prefer the env var over the flag — exposing a
+    /// Required by every signing subcommand. Prefer the env var over the flag — exposing a
     /// private key in shell history is unsafe. When absent, falls back to the value stored
     /// by `pm wallet create` / `pm wallet import` in `<config-dir>/config.toml`.
     #[arg(long, global = true, env = "PM_PRIVATE_KEY", hide_env_values = true)]
@@ -54,8 +54,7 @@ pub struct Cli {
     #[arg(long, global = true, env = "PM_SIGNATURE_TYPE")]
     pub signature_type: Option<SignatureTypeArg>,
 
-    /// CTFExchange contract address. Currently unused on Phase 2.1 paths (`order` flows land
-    /// in Phase 2.2) but accepted up front so workflows that combine auth + order placement
+    /// CTFExchange contract address. Accepted up front so workflows that combine auth + order placement
     /// share the same env layout.
     #[arg(long, global = true, env = "PM_EXCHANGE_ADDRESS")]
     pub exchange_address: Option<String>,
@@ -119,7 +118,7 @@ pub enum Command {
     Balance(BalanceArgs),
     /// WebSocket subscriptions (`/ws/market` public; `/ws/user` auth-required).
     Ws(WsArgs),
-    /// Phase 2.2: order lifecycle (create / cancel / list / replace / scoring).
+    /// Order lifecycle (create / cancel / list / replace / scoring).
     #[command(subcommand)]
     Order(crate::order_commands::OrderCommand),
     /// `GET /trades` — paginated trade history (L2-auth).
@@ -217,8 +216,8 @@ pub struct CreateKeyArgs {
     /// Nonce embedded in the `ClobAuth` EIP-712 message (default 0).
     #[arg(long, default_value_t = 0)]
     pub nonce: u32,
-    /// Optional funder address for proxy / Safe flows. Not consumed by Phase 2.1 paths;
-    /// see the global `--signature-type` for the EIP-712 signing mode.
+    /// Optional funder address for proxy / Safe flows.
+    /// See the global `--signature-type` for the EIP-712 signing mode.
     #[arg(long)]
     pub funder: Option<String>,
 }

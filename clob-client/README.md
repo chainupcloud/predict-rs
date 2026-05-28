@@ -271,21 +271,24 @@ clob-client/src/
 ├── lib.rs              — re-exports + top-level docs
 ├── error.rs            — Error enum (thiserror)
 ├── types.rs            — Address, Side, SignatureType, ScopeId, AssetType
+├── endpoints.rs        — Endpoints (clob / gamma / ws) + tenant derivation
 ├── auth.rs             — PRED_* header constants, L2 HMAC sign
-├── signer.rs           — PMCup26Signer (ClobAuth + Order EIP-712)
-├── client.rs           — Client + ClientBuilder
+├── signer.rs           — PMCup26Signer (ClobAuth / Order / SafeTx / LoginMessage EIP-712)
+├── client.rs           — Client + ClientBuilder (REST surface)
 ├── clob/
-│   ├── types.rs        — Order, OrderBuilder, OrderBookSummary, Trade, …
-│   ├── orderbook.rs    — book walk helpers
+│   ├── types.rs        — Order, OrderBookSummary, Trade, …
+│   ├── order_builder.rs — OrderBuilder (limit / market)
 │   └── ws/
-│       ├── connection.rs   — auto-reconnect WS task
+│       ├── client.rs       — ClobWebSocketClient
 │       ├── subscription.rs — MarketStream / UserStream
-│       └── types/
-│           ├── request.rs  — subscribe envelopes
-│           └── response.rs — MarketEvent / UserEvent / OrderEvent / TradeEvent
-└── gamma/
-    ├── client.rs       — Gamma sub-client
-    └── types.rs        — Event, Market, Tag, Profile, …
+│       └── types/{request, response}.rs
+├── gamma/
+│   ├── client.rs       — Gamma sub-client (events / markets / tags / profiles)
+│   └── types/{request, response}.rs
+├── data/               — data-service client (portfolio / activity / leaderboards)
+├── ws/                 — shared WS transport (auto-reconnect)
+├── safe/               — Gnosis Safe v1.3 SafeTransaction + multisend encoder
+└── relayer/            — RelayerClient (submit / poll Safe meta-tx)
 ```
 
 ## Key types
@@ -355,8 +358,8 @@ Golden vectors live at [`tests/fixtures/golden.json`](tests/fixtures/golden.json
 
 ## Minimum Supported Rust Version
 
-**1.80**. We pin to the version in `rust-toolchain.toml`. Older toolchains may compile but are not tested.
+**1.88**. Pinned via `rust-version` in the workspace `Cargo.toml`. Older toolchains may compile but are not tested.
 
 ## License
 
-Apache-2.0. See `LICENSE` at the repo root.
+MIT — see [`LICENSE`](../LICENSE) at the repo root.

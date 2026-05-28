@@ -1,4 +1,4 @@
-# Gamma client (Phase 3a)
+# Gamma client
 
 `pm-rs-clob-client` exposes the Gamma REST API via [`GammaClient`](../clob-client/src/gamma/client.rs).
 Gamma is a separate REST service from CLOB; it lives at
@@ -34,10 +34,10 @@ If the client was constructed with only `--clob-endpoint` and no Gamma URL,
 | GET  | `/health` | `health` | `pm gamma health` | implemented |
 | GET  | `/public-info` | `public_info` | `pm gamma public-info` | implemented |
 | GET  | `/agreements` | `agreements` | `pm gamma agreements` | implemented |
-| GET  | `/auth/jwks` | — | — | Phase 2 (auth-owned) |
-| GET  | `/auth/nonce` | — | — | Phase 2 (auth-owned) |
-| POST | `/auth/login` | — | — | Phase 2 (auth-owned) |
-| POST | `/auth/refresh` | — | — | Phase 2 (auth-owned) |
+| GET  | `/auth/jwks` | — | — | auth-owned (`jwt_login`) |
+| GET  | `/auth/nonce` | — | — | auth-owned (`jwt_login`) |
+| POST | `/auth/login` | — | — | auth-owned (`jwt_login`) |
+| POST | `/auth/refresh` | — | — | auth-owned (`jwt_login`) |
 | GET  | `/config/sport-types` | `sport_types` | `pm gamma sport-types` | implemented |
 | GET  | `/tags` | `list_tags` | `pm gamma tags list` | implemented |
 | GET  | `/tags/{id}` | `get_tag` | `pm gamma tags get <id>` | implemented |
@@ -65,13 +65,13 @@ If the client was constructed with only `--clob-endpoint` and no Gamma URL,
 | GET  | `/comments` | `list_comments` | `pm gamma comments list` | implemented |
 | GET  | `/comments/{id}` | `get_comment` | `pm gamma comments get <id>` | implemented |
 | GET  | `/comments/user_address/{addr}` | `comments_by_user` | `pm gamma comments by-user <addr>` | implemented |
-| POST | `/profiles` | — | — | requires Bearer JWT (Phase 2) |
+| POST | `/profiles` | — | — | requires Bearer JWT |
 | GET  | `/public-profile` | `get_public_profile` | `pm gamma profiles public <addr>` | implemented |
 | GET  | `/profiles/user_address/{addr}` | `get_profile_by_address` | `pm gamma profiles get <addr>` | implemented |
 | GET  | `/public-search` | `search` | `pm gamma search <query>` | implemented |
-| GET  | `/games`, `/games/{id}`, `/games/{id}/scores` | — | — | tenant-specific sports fixtures, not in scope for Phase 3a |
-| GET  | `/sports-events` | — | — | aggregated fixture + market tree, not in scope for Phase 3a |
-| POST | `/disputes/evidence` | — | — | write endpoint, deferred to Phase 3b |
+| GET  | `/games`, `/games/{id}`, `/games/{id}/scores` | — | — | tenant-specific sports fixtures, tenant-specific, not implemented |
+| GET  | `/sports-events` | — | — | aggregated fixture + market tree, tenant-specific, not implemented |
+| POST | `/disputes/evidence` | — | — | write endpoint, not implemented |
 | GET  | `/docs`, `/openapi.json` | — | — | server-side Scalar / spec, not relevant to SDK |
 
 ## Differences vs Polymarket Gamma

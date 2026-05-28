@@ -87,9 +87,8 @@ The config file is also consulted as a fallback by every command that needs a ke
 | chain id         | `--chain-id`             | `PM_CHAIN_ID`      | `config.toml`         |
 | scope id         | `--scope-id`             | `PM_SCOPE_ID`      | `config.toml`         |
 
-The signature type stored in `config.toml` is not yet consumed by any subcommand; it is
-reserved for the upcoming `pm setup` wizard, which will pre-fill `--signature-type` on
-the order-placement paths.
+`pm setup` writes the same `config.toml`; see `pm setup --help` for the interactive
+wizard that walks through wallet / chain / scope-id selection.
 
 ## On-disk schema
 

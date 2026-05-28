@@ -2,7 +2,7 @@
 
 > **Scope:** `pm-rs` mirrors Polymarket V1 (`rs-clob-client` v0.4 + `polymarket-cli` v0.1.4) functionally. This document lists **only the differences**; anything not listed here is unchanged or carried over directly.
 
-Last updated: 2026-05-19 (Phase 2.2: order construction / signing / placement / cancellation / trade query).
+Last updated: 2026-05-28.
 
 ---
 
@@ -100,7 +100,7 @@ Last updated: 2026-05-19 (Phase 2.2: order construction / signing / placement / 
 | `GET /price` | `{"price": ...}` | Same |
 | `GET /balance-allowance` | EOA balance | Automatic **Safe-address derivation from EOA + scopeId**; returns Safe balance |
 | `GET /auth/api-keys` | Lists API keys for the address | Also returns `proxy_wallet` (Safe address) |
-| `GET /builder/trades` | Standard Polymarket Builder flow | `Client::builder_trades` exposes the L2-auth query path; the V1 `BuilderConfig::remote` remote-signer for `POST` paths is NOT implemented (Phase 4+). |
+| `GET /builder/trades` | Standard Polymarket Builder flow | `Client::builder_trades` exposes the L2-auth query path; the V1 `BuilderConfig::remote` remote-signer for `POST` paths is not implemented. |
 | `POST /order` / `POST /orders` / `POST /orders/replace` | V1: built into `Client::post_order` / `post_orders` / `replace_order`. | Same surface (`Client::post_order` / `post_orders` / `replace_order`) — JSON shape matches `handlers.orderJSON` (camelCase `tokenID` / `makerAmount` / `feeRateBps` / `signatureType` / `scopeId`; `signatureType` as numeric **string**; salt as decimal string). |
 | `DELETE /order` / `DELETE /orders` / `DELETE /cancel-all` / `DELETE /cancel-market-orders` | V1: `cancel_order` / `cancel_orders` / `cancel_all` / `cancel_market_orders`. | Same — `DELETE /orders` accepts both `["id"...]` (preferred) and `{"orderIDs": [...]}` per openapi; SDK sends the bare array form. |
 | `GET /orders` / `GET /order/{id}` | V1: paginated `next_cursor` | Same envelope shape (`{limit, count, next_cursor, data}`); `next_cursor == "LTE="` signals end. Platform-specific `lazy` field surfaced in `OpenOrderResponse`. |
@@ -116,7 +116,7 @@ Last updated: 2026-05-19 (Phase 2.2: order construction / signing / placement / 
 | `rtds` (real-time data stream) | Polymarket proprietary |
 | `rfq` (request for quote) | Polymarket proprietary |
 | `ctf` (EOA-broadcast split / merge / redeem) | Only Safe-mode writes are supported (`signatureType=2`). The CLI ships `pm ctf split / merge / redeem` against the `relayer-service` (Safe meta-tx), but the EOA-direct broadcast variant Polymarket V1 ships is intentionally not provided. |
-| `gamma` streaming | `pm-cup2026` `gamma-service` is REST-only; no stream. REST surface implemented in Phase 3a — see [`docs/gamma.md`](gamma.md). |
+| `gamma` streaming | `pm-cup2026` `gamma-service` is REST-only; no stream. REST surface is shipped — see [`docs/gamma.md`](gamma.md). |
 
 ### Polymarket V1 CLOB endpoints not in `clob-service` (verified 2026-05-19)
 
@@ -161,7 +161,7 @@ Cross-checked against `pm-cup2026/services/clob-service/internal/tradingapi/serv
 | Fee split | Single platform fee | **Split into `PLATFORM_FEE + TENANT_FEE`**, 3 on-chain transactions per side per fill |
 | Salt generation | `(seconds × rand_f64) & (2^53 - 1)` | `time.Now().UnixNano() & (2^53 - 1)` (matches `pm-sdk-go::time.Now().UnixNano()`); pinned via `OrderBuilder::salt(...)` for reproducible signatures |
 | `v` byte normalisation | n/a (V1 path emits {27,28} natively) | `+27` normalisation applied client-side (`normalize_ecdsa_v`); on-chain `ECDSA.recover` requires `{27, 28}`, server-side L2 verifier accepts both |
-| `OrderBuilder` builder-codes / metadata / defer_exec | n/a in V1 | `deferExec` exists in the wire schema but the SDK always sends `false` (Phase 2.2 scope); builder-program codes / metadata are V2-only and explicitly NOT carried |
+| `OrderBuilder` builder-codes / metadata / defer_exec | n/a in V1 | `deferExec` exists in the wire schema but the SDK always sends `false`; builder-program codes / metadata are V2-only and explicitly NOT carried |
 
 ---
 
@@ -172,14 +172,14 @@ Cross-checked against `pm-cup2026/services/clob-service/internal/tradingapi/serv
 | Client state machine | Type-state pattern (`Client<Unauthenticated>` → `Client<Authenticated<K>>`) | **Single `Client` struct + `Option<Credentials>` + `Option<signer_address>`** — credentials and the L1 signer address are attached at build time via `ClientBuilder::credentials` / `signer_address` (no Builder / Normal / AWS-KMS Kind tiers) |
 | Builder authentication | `promote_to_builder(BuilderConfig)` + remote signer service | Not implemented (no user requirement yet) |
 | AWS KMS signer | Built-in `signer-aws` example | Not implemented (callers can plug in any `alloy::signers::Signer` impl) |
-| Heartbeat long connection | `heartbeats` feature flag | Phase 3 |
-| WebSocket asset-ID type | `Vec<String>` | Same — shipped in Phase 3b (see [`docs/ws.md`](ws.md)) |
+| Heartbeat long connection | `heartbeats` feature flag | Not implemented (`POST /heartbeats` reachable; long-poll variant deferred) |
+| WebSocket asset-ID type | `Vec<String>` | Same — shipped (see [`docs/ws.md`](ws.md)) |
 | WebSocket transport | `tokio_tungstenite`, type-state authenticated client | `tokio_tungstenite`, single-state client; auth carried in the first WS frame for the user channel (matches the server contract, **not** HTTP `PRED_*` headers) |
 | WebSocket subscribe message | Single `SubscriptionRequest` covering both channels | Two distinct envelopes — `MarketSubscribeRequest` (`type=market`, `assets_ids`) and `UserSubscribeRequest` (`type=user`, `auth.{apiKey,passphrase}`, `markets`) |
 | WebSocket heartbeat | Protocol-level Ping | Text frame `"PING"` / `"PONG"` (see `services/clob-service/internal/wsservice/`) |
 | WebSocket runtime sub/unsub | Per-channel `subscribe` / `unsubscribe` envelopes | Same shape (`{"operation":"subscribe","assets_ids":[...]}` etc.) |
 | WebSocket reconnect | Exponential backoff, re-emits subscriptions | Same |
-| Public utility functions | Private | Phase 3 will expose a `utilities` module, aligned with the V2 SDK's design |
+| Public utility functions | Private | Not exposed; callers can compose `OrderBuilder` + signer + `Client` directly |
 
 ---
 
@@ -199,8 +199,8 @@ Cross-checked against `pm-cup2026/services/clob-service/internal/tradingapi/serv
 V2 ideas worth borrowing **selectively** (not adopted wholesale):
 
 - `build_sign_and_post()` one-shot order placement — partial: `OrderBuilder::build_and_sign` + `Client::post_order` are separate calls (caller chooses to compose them).
-- `user_usdc_balance()` market-buy balance auto-adjustment — reassess in Phase 3+.
-- The public `clob::utilities` module — Phase 3 will ship an equivalent with the platform's own fee formulas.
+- `user_usdc_balance()` market-buy balance auto-adjustment — not implemented.
+- A public `clob::utilities` module with the platform's fee formulas — not implemented.
 
 ---
 
