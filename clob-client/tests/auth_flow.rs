@@ -12,7 +12,7 @@
 //! 4. The L2 HMAC matches the request that was actually sent (path-only, no query string).
 //! 5. `create_or_derive_api_key` falls back to derive on HTTP error.
 
-use pm_rs_clob_client::{
+use predict_rs_clob_client::{
     AssetType, Client, Credentials, Endpoints, PMCup26Signer,
     auth::{build_l2_headers, compute_l2_hmac, current_timestamp, header},
 };
@@ -367,7 +367,7 @@ async fn balance_allowance_rejects_token_id_for_collateral() {
         .balance_allowance(AssetType::Collateral, Some("oops"))
         .await
         .expect_err("must reject token_id for collateral");
-    assert!(matches!(err, pm_rs_clob_client::Error::Validation(_)));
+    assert!(matches!(err, predict_rs_clob_client::Error::Validation(_)));
     // No HTTP request should have been issued.
     assert!(server.received_requests().await.unwrap().is_empty());
 }
@@ -380,7 +380,7 @@ async fn balance_allowance_requires_token_id_for_conditional() {
         .balance_allowance(AssetType::Conditional, None)
         .await
         .expect_err("must require token_id for conditional");
-    assert!(matches!(err, pm_rs_clob_client::Error::Validation(_)));
+    assert!(matches!(err, predict_rs_clob_client::Error::Validation(_)));
     assert!(server.received_requests().await.unwrap().is_empty());
 }
 
@@ -410,7 +410,7 @@ async fn l2_without_credentials_errors() {
     let server = MockServer::start().await;
     let client = client_for(&server, false).await;
     let err = client.api_keys().await.expect_err("no creds → error");
-    assert!(matches!(err, pm_rs_clob_client::Error::NotAuthenticated));
+    assert!(matches!(err, predict_rs_clob_client::Error::NotAuthenticated));
 }
 
 #[tokio::test]

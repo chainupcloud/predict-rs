@@ -1,4 +1,4 @@
-//! Offline end-to-end tests for [`pm_rs_clob_client::ClobWebSocketClient`].
+//! Offline end-to-end tests for [`predict_rs_clob_client::ClobWebSocketClient`].
 //!
 //! We spin a minimal `tokio_tungstenite` server on a free port, drive the
 //! SDK against it, and assert the wire frames are exactly what the
@@ -12,9 +12,9 @@ use std::time::Duration;
 
 use futures::StreamExt as _;
 use futures_util::SinkExt as _;
-use pm_rs_clob_client::clob::ws::types::request::MarketLevel;
-use pm_rs_clob_client::clob::ws::types::response::{MarketEvent, OrderSide, UserEvent};
-use pm_rs_clob_client::{
+use predict_rs_clob_client::clob::ws::types::request::MarketLevel;
+use predict_rs_clob_client::clob::ws::types::response::{MarketEvent, OrderSide, UserEvent};
+use predict_rs_clob_client::{
     Client, ClobWebSocketClient, Credentials, Endpoints, MarketSubscribeOpts,
 };
 use tokio::net::TcpListener;
@@ -89,7 +89,7 @@ async fn spin_server(push_frames: Vec<String>) -> (Url, SharedLog) {
 }
 
 fn build_ws_client(base: Url, creds: Option<Credentials>) -> ClobWebSocketClient {
-    let cfg = pm_rs_clob_client::ws::WsConfig {
+    let cfg = predict_rs_clob_client::ws::WsConfig {
         ping_interval: Duration::ZERO, // disable heartbeat for deterministic tests
         emit_reconnecting: false,
         ..Default::default()
@@ -267,7 +267,7 @@ async fn user_channel_auth_failure_surfaces_as_user_auth_rejected() {
         .unwrap();
     let err = next.expect_err("expected user-auth error envelope");
     assert!(
-        matches!(err, pm_rs_clob_client::ws::WsError::UserAuthRejected(_)),
+        matches!(err, predict_rs_clob_client::ws::WsError::UserAuthRejected(_)),
         "got: {err:?}"
     );
 }

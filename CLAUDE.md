@@ -1,4 +1,4 @@
-# CLAUDE.md — pm-rs
+# CLAUDE.md — predict-rs
 
 ## Language policy
 
@@ -13,10 +13,10 @@ Telegram chat replies to the user may remain Chinese; this rule applies to repos
 
 ## Project scope
 
-`pm-rs` is the Rust toolchain for [`pm-cup2026`](https://github.com/chainupcloud/pm-cup2026) prediction-market platform. Cargo workspace with two member crates:
+`predict-rs` is the Rust toolchain for [`pm-cup2026`](https://github.com/chainupcloud/pm-cup2026) prediction-market platform. Cargo workspace with two member crates:
 
-- `pm-rs-clob-client` (lib) — CLOB / Gamma / WebSocket SDK. Counterpart of [`pm-sdk-go`](https://github.com/chainupcloud/pm-sdk-go); ported from Polymarket's `rs-clob-client` V1 with platform-specific extensions.
-- `pm-cli` (bin: `pm`) — terminal client. Counterpart of Polymarket's `polymarket-cli`.
+- `predict-rs-clob-client` (lib) — CLOB / Gamma / WebSocket SDK. Counterpart of [`pm-sdk-go`](https://github.com/chainupcloud/pm-sdk-go); ported from Polymarket's `rs-clob-client` V1 with platform-specific extensions.
+- `predict-cli` (bin: `predict-cli`) — terminal client. Counterpart of Polymarket's `polymarket-cli`.
 
 ## Hard constraints (drive API design)
 
@@ -60,7 +60,7 @@ Additional EVM networks will be added in the future.
 The byte-level output of every signing primitive (`ClobAuth`, `Order`) **must** match `pm-sdk-go/pkg/signer`. Any change to the signer requires re-running:
 
 ```bash
-cargo test -p pm-rs-clob-client --test golden_signer
+cargo test -p predict-rs-clob-client --test golden_signer
 ```
 
 Golden vectors live at `clob-client/tests/fixtures/golden.json` (a copy of `pm-sdk-go/pkg/signer/testdata/golden.json`). If the upstream Go fixture changes, sync the file here and re-run the test.

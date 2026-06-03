@@ -1,6 +1,6 @@
-//! `pm order …` and `pm trade …` subcommand wiring.
+//! `predict-cli order …` and `predict-cli trade …` subcommand wiring.
 //!
-//! Maps the user-facing clap structs to the SDK's [`pm_rs_clob_client::OrderBuilder`] +
+//! Maps the user-facing clap structs to the SDK's [`predict_rs_clob_client::OrderBuilder`] +
 //! `Client::post_order` / `Client::cancel_*` / `Client::open_orders` / `Client::trades`
 //! surface. Every flag is optional except the ones that affect signing (token / side /
 //! price-or-amount / fee-rate / maker for Safe).
@@ -11,25 +11,25 @@ use rust_decimal::Decimal;
 use serde_json::json;
 use std::str::FromStr;
 
-use pm_rs_clob_client::clob::order_builder::{Limit, Market, OrderBuilder};
-use pm_rs_clob_client::clob::types::{
+use predict_rs_clob_client::clob::order_builder::{Limit, Market, OrderBuilder};
+use predict_rs_clob_client::clob::types::{
     CancelMarketOrderRequest, OpenOrderResponse, OrderType, OrdersRequest, Page,
     PostOrderResponse, ReplaceOrdersRequest, SendOrderRequest, SignableOrder, SignedOrder,
     TradeResponse, TradesRequest,
 };
-use pm_rs_clob_client::types::{Address, SignatureType, U256};
-use pm_rs_clob_client::{PMCup26Signer, Side};
+use predict_rs_clob_client::types::{Address, SignatureType, U256};
+use predict_rs_clob_client::{PMCup26Signer, Side};
 
 use crate::cli::{Cli, SideArg};
 use crate::commands::{parse_address, signer_from_args, with_l2_credentials};
 use crate::output::{self, Format};
 
-/// `pm order <SUBCOMMAND>`.
+/// `predict-cli order <SUBCOMMAND>`.
 #[derive(Debug, Subcommand)]
 pub enum OrderCommand {
     /// Build, sign, then `POST /order`. Use `--dry-run` to inspect the JSON without posting.
     Create(CreateArgs),
-    /// Market-order shortcut: equivalent to `pm order create --market`, with a slimmer flag set.
+    /// Market-order shortcut: equivalent to `predict-cli order create --market`, with a slimmer flag set.
     /// Default `--order-type` is `fak`.
     Market(MarketArgs),
     /// Build N signed orders sharing the same side / fee / signer, then `POST /orders`. Up to 15
@@ -53,7 +53,7 @@ pub enum OrderCommand {
     Scoring(ScoringArgs),
 }
 
-/// `pm order create` arguments — mirrors `Polymarket clob create-order` shape with
+/// `predict-cli order create` arguments — mirrors `Polymarket clob create-order` shape with
 /// renames. `--limit` / `--market` selects the builder variant (limit by default).
 #[derive(Debug, Args)]
 pub struct CreateArgs {
@@ -113,8 +113,8 @@ pub struct CreateArgs {
     pub dry_run: bool,
 }
 
-/// `pm order market` — slim args for market orders. All optional flags carry the same
-/// semantics as the `--market` path of `pm order create`.
+/// `predict-cli order market` — slim args for market orders. All optional flags carry the same
+/// semantics as the `--market` path of `predict-cli order create`.
 #[derive(Debug, Args)]
 pub struct MarketArgs {
     /// Token id (uint256 decimal). Required.
@@ -184,7 +184,7 @@ impl MarketArgs {
     }
 }
 
-/// `pm order post-batch` — N orders sharing side / fee / maker / signature-type, with
+/// `predict-cli order post-batch` — N orders sharing side / fee / maker / signature-type, with
 /// per-token price + size. Up to 15 orders per batch (server limit).
 #[derive(Debug, Args)]
 pub struct PostBatchArgs {
@@ -297,7 +297,7 @@ pub struct ReplaceArgs {
     #[arg(long, value_delimiter = ',')]
     pub cancel: Vec<String>,
     /// JSON file containing an array of `SendOrder` envelopes — same shape as `POST /orders`.
-    /// The CLI does not currently rebuild + sign new orders inline (use `pm order create
+    /// The CLI does not currently rebuild + sign new orders inline (use `predict-cli order create
     /// --dry-run` to mint the JSON for each).
     #[arg(long)]
     pub orders_file: Option<String>,
@@ -308,7 +308,7 @@ pub struct ScoringArgs {
     pub order_id: String,
 }
 
-/// `pm trade list` arguments.
+/// `predict-cli trade list` arguments.
 #[derive(Debug, Args)]
 pub struct TradeArgs {
     #[arg(long)]
@@ -779,7 +779,7 @@ fn print_post_order(resp: &PostOrderResponse, fmt: Format) -> anyhow::Result<()>
 }
 
 fn print_cancel(
-    resp: &pm_rs_clob_client::CancelOrdersResponse,
+    resp: &predict_rs_clob_client::CancelOrdersResponse,
     fmt: Format,
 ) -> anyhow::Result<()> {
     match fmt {

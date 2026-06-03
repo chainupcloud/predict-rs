@@ -1,11 +1,11 @@
-//! Clap definitions for the `pm` binary.
+//! Clap definitions for the `predict-cli` binary.
 
 use clap::{Parser, Subcommand, ValueEnum};
 
 use crate::output::Format;
 
 #[derive(Debug, Parser)]
-#[command(name = "pm", version, about = "pm-cup2026 terminal client", long_about = None)]
+#[command(name = "predict-cli", version, about = "pm-cup2026 terminal client", long_about = None)]
 pub struct Cli {
     /// Tenant root host. The CLOB / Gamma / WebSocket endpoints are derived using the canonical
     /// canonical subdomain pattern (`clob-api.<host>` / `gamma-api.<host>` / `clob-ws.<host>`).
@@ -37,19 +37,19 @@ pub struct Cli {
     /// EOA private key (hex, with or without `0x` prefix) used to sign L1 EIP-712 challenges.
     /// Required by every signing subcommand. Prefer the env var over the flag — exposing a
     /// private key in shell history is unsafe. When absent, falls back to the value stored
-    /// by `pm wallet create` / `pm wallet import` in `<config-dir>/config.toml`.
+    /// by `predict-cli wallet create` / `predict-cli wallet import` in `<config-dir>/config.toml`.
     #[arg(long, global = true, env = "PM_PRIVATE_KEY", hide_env_values = true)]
     pub private_key: Option<String>,
 
     /// Override the directory holding `config.toml` (default: `dirs::config_dir()/pm`,
-    /// i.e. `~/.config/pm` on Linux). Used by `pm wallet …` for persistence and by every
+    /// i.e. `~/.config/pm` on Linux). Used by `predict-cli wallet …` for persistence and by every
     /// other command as the final fallback for `--private-key` / `--chain-id` / `--scope-id`.
     #[arg(long, global = true, env = "PM_CONFIG_DIR")]
     pub config_dir: Option<String>,
 
     /// Global EIP-712 signature type (`eoa` / `proxy` / `gnosis-safe`). Defaults to
     /// `gnosis-safe` — Safe-wallet flow where the EOA signs but the Safe holds
-    /// funds and is the `maker`. Persisted by `pm wallet create / import / set-safe`;
+    /// funds and is the `maker`. Persisted by `predict-cli wallet create / import / set-safe`;
     /// the flag overrides the stored value for the current invocation only.
     #[arg(long, global = true, env = "PM_SIGNATURE_TYPE")]
     pub signature_type: Option<SignatureTypeArg>,
@@ -132,7 +132,7 @@ pub enum Command {
     #[command(subcommand)]
     Approve(crate::approve_commands::ApproveCommand),
     /// Interactive REPL. Mirrors `polymarket shell` — each line parses as a fresh
-    /// `pm <args>` invocation; env vars / config-file state apply per line.
+    /// `predict-cli <args>` invocation; env vars / config-file state apply per line.
     Shell,
     /// Guided first-time setup wizard (wallet + tenant + Safe + L2 API key).
     /// Mirrors `polymarket setup`, adapted for multi-tenant topology.
@@ -261,7 +261,7 @@ pub enum SignatureTypeArg {
     GnosisSafe,
 }
 
-impl From<SignatureTypeArg> for pm_rs_clob_client::types::SignatureType {
+impl From<SignatureTypeArg> for predict_rs_clob_client::types::SignatureType {
     fn from(v: SignatureTypeArg) -> Self {
         match v {
             SignatureTypeArg::Eoa => Self::Eoa,
@@ -277,7 +277,7 @@ pub enum AssetTypeArg {
     Conditional,
 }
 
-impl From<AssetTypeArg> for pm_rs_clob_client::AssetType {
+impl From<AssetTypeArg> for predict_rs_clob_client::AssetType {
     fn from(v: AssetTypeArg) -> Self {
         match v {
             AssetTypeArg::Collateral => Self::Collateral,
@@ -291,16 +291,16 @@ pub struct TokenArgs {
     pub token_id: String,
 }
 
-/// Batch read endpoints (`pm midpoints / spreads / last-trades`) — accept N positional token ids.
+/// Batch read endpoints (`predict-cli midpoints / spreads / last-trades`) — accept N positional token ids.
 #[derive(Debug, clap::Args)]
 pub struct TokensArgs {
-    /// One or more token ids. Pass as separate args (`pm midpoints t1 t2 t3`) or as a single
-    /// comma-separated string (`pm midpoints t1,t2,t3`).
+    /// One or more token ids. Pass as separate args (`predict-cli midpoints t1 t2 t3`) or as a single
+    /// comma-separated string (`predict-cli midpoints t1,t2,t3`).
     #[arg(required = true, num_args = 1..)]
     pub token_ids: Vec<String>,
 }
 
-/// `pm prices` / `pm books` — each token must specify a side: `<id>:buy` or `<id>:sell`.
+/// `predict-cli prices` / `predict-cli books` — each token must specify a side: `<id>:buy` or `<id>:sell`.
 #[derive(Debug, clap::Args)]
 pub struct PricesBatchArgs {
     /// Tokens in `<id>:<buy|sell>` form. Repeat the flag-free positional arg for each entry.
@@ -337,9 +337,9 @@ pub enum PriceHistoryIntervalArg {
     All,
 }
 
-impl From<PriceHistoryIntervalArg> for pm_rs_clob_client::clob::types::PriceHistoryInterval {
+impl From<PriceHistoryIntervalArg> for predict_rs_clob_client::clob::types::PriceHistoryInterval {
     fn from(v: PriceHistoryIntervalArg) -> Self {
-        use pm_rs_clob_client::clob::types::PriceHistoryInterval as I;
+        use predict_rs_clob_client::clob::types::PriceHistoryInterval as I;
         match v {
             PriceHistoryIntervalArg::H1 => I::H1,
             PriceHistoryIntervalArg::H6 => I::H6,
@@ -365,7 +365,7 @@ pub enum SideArg {
     Sell,
 }
 
-impl From<SideArg> for pm_rs_clob_client::types::Side {
+impl From<SideArg> for predict_rs_clob_client::types::Side {
     fn from(v: SideArg) -> Self {
         match v {
             SideArg::Buy => Self::Buy,

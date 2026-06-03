@@ -2,9 +2,9 @@
 
 use anyhow::{Context, anyhow};
 use chrono::DateTime;
-use pm_rs_clob_client::clob::types::OrderBookSummary;
-use pm_rs_clob_client::types::ScopeId;
-use pm_rs_clob_client::{
+use predict_rs_clob_client::clob::types::OrderBookSummary;
+use predict_rs_clob_client::types::ScopeId;
+use predict_rs_clob_client::{
     ApiKeyInfo, AssetType, BalanceAllowanceResponse, Client, ClientBuilder, Credentials, Endpoints,
     PMCup26Signer,
 };
@@ -16,7 +16,7 @@ use crate::cli::{AuthCommand, BalanceArgs, Cli, Command, CreateKeyArgs, DeleteKe
 use crate::output::{self, Format};
 
 pub async fn run(args: Cli) -> anyhow::Result<()> {
-    // `pm wallet …` is local-only — no endpoint required. Dispatch before endpoint
+    // `predict-cli wallet …` is local-only — no endpoint required. Dispatch before endpoint
     // resolution so the wallet UX works on a fresh checkout with no flags set.
     if matches!(args.command, Command::Wallet(_)) {
         let mut owned = args;
@@ -28,19 +28,19 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
         return crate::wallet_commands::run(&owned, &sub, fmt).await;
     }
 
-    // `pm shell` is purely local — no endpoint required. Dispatch before endpoint
+    // `predict-cli shell` is purely local — no endpoint required. Dispatch before endpoint
     // resolution so users can launch the REPL without any `--tenant` flag.
     if matches!(args.command, Command::Shell) {
         return crate::shell_commands::run().await;
     }
 
-    // `pm setup` runs its own interactive flow; some sub-steps build a Client of their
-    // own. Dispatch before endpoint resolution so a fresh install can run `pm setup`.
+    // `predict-cli setup` runs its own interactive flow; some sub-steps build a Client of their
+    // own. Dispatch before endpoint resolution so a fresh install can run `predict-cli setup`.
     if matches!(args.command, Command::Setup) {
         return crate::setup_commands::run(&args).await;
     }
 
-    // `pm ctf` — mix of off-chain helpers (`condition-id`, `position-id`) and on-chain
+    // `predict-cli ctf` — mix of off-chain helpers (`condition-id`, `position-id`) and on-chain
     // Safe-mode writes (`redeem` / `split` / `merge`). The on-chain variants use the
     // network YAML supplied via `--network-config` so no CLOB endpoint is needed at the
     // top level.
@@ -54,7 +54,7 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
         return crate::ctf_commands::run(&owned, cargs, fmt).await;
     }
 
-    // `pm approve …` only touches the on-chain RPC — no CLOB endpoint required.
+    // `predict-cli approve …` only touches the on-chain RPC — no CLOB endpoint required.
     if matches!(args.command, Command::Approve(_)) {
         let mut owned = args;
         let fmt = owned.output;
@@ -295,7 +295,7 @@ pub(crate) fn signer_from_args(args: &Cli) -> anyhow::Result<PMCup26Signer> {
         &pk_owned
     } else {
         return Err(anyhow!(
-            "private key required for L1 auth: pass --private-key, set PM_PRIVATE_KEY, or run `pm wallet create`"
+            "private key required for L1 auth: pass --private-key, set PM_PRIVATE_KEY, or run `predict-cli wallet create`"
         ));
     };
 
@@ -326,7 +326,7 @@ fn effective_chain_id(args: &Cli) -> anyhow::Result<Option<u64>> {
 /// env > stored `config.toml` > default `gnosis-safe` (Safe-wallet flow).
 pub(crate) fn effective_signature_type(
     args: &Cli,
-) -> anyhow::Result<pm_rs_clob_client::types::SignatureType> {
+) -> anyhow::Result<predict_rs_clob_client::types::SignatureType> {
     use crate::cli::SignatureTypeArg;
     if let Some(s) = args.signature_type {
         return Ok(s.into());
@@ -383,7 +383,7 @@ fn build_l2_client(args: &Cli, creds: Credentials, signer: &PMCup26Signer) -> an
 pub(crate) async fn with_l2_credentials<F, Fut, T>(args: &Cli, op: F) -> anyhow::Result<T>
 where
     F: FnOnce(Client) -> Fut,
-    Fut: std::future::Future<Output = pm_rs_clob_client::Result<T>>,
+    Fut: std::future::Future<Output = predict_rs_clob_client::Result<T>>,
 {
     let signer = signer_from_args(args)?;
     // Try the credentials file first, else auto-derive.
@@ -406,9 +406,9 @@ fn load_credentials_file(path: &str) -> anyhow::Result<Credentials> {
         .with_context(|| format!("decode credentials file {path}"))
 }
 
-pub(crate) fn parse_address(s: &str) -> anyhow::Result<pm_rs_clob_client::types::Address> {
+pub(crate) fn parse_address(s: &str) -> anyhow::Result<predict_rs_clob_client::types::Address> {
     use std::str::FromStr;
-    pm_rs_clob_client::types::Address::from_str(s)
+    predict_rs_clob_client::types::Address::from_str(s)
         .map_err(|e| anyhow!("parse address: {e}"))
 }
 
@@ -575,7 +575,7 @@ fn expand_csv(inputs: &[String]) -> Vec<String> {
 /// itself be a comma-separated list, mirroring `expand_csv` ergonomics.
 fn parse_token_side_entries(
     entries: &[String],
-) -> anyhow::Result<Vec<(String, pm_rs_clob_client::Side)>> {
+) -> anyhow::Result<Vec<(String, predict_rs_clob_client::Side)>> {
     let mut out = Vec::new();
     for raw in entries.iter().flat_map(|s| s.split(',')) {
         let trimmed = raw.trim();
@@ -586,8 +586,8 @@ fn parse_token_side_entries(
             anyhow!("entry '{trimmed}' must be in '<token_id>:<buy|sell>' form")
         })?;
         let side = match side.trim().to_ascii_lowercase().as_str() {
-            "buy" => pm_rs_clob_client::Side::Buy,
-            "sell" => pm_rs_clob_client::Side::Sell,
+            "buy" => predict_rs_clob_client::Side::Buy,
+            "sell" => predict_rs_clob_client::Side::Sell,
             other => return Err(anyhow!("invalid side '{other}' in entry '{trimmed}' — use 'buy' or 'sell'")),
         };
         out.push((tok.trim().to_owned(), side));

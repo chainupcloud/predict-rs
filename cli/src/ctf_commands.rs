@@ -1,4 +1,4 @@
-//! `pm ctf` — Conditional Token Framework helpers.
+//! `predict-cli ctf` — Conditional Token Framework helpers.
 //!
 //! Two flavours:
 //!
@@ -19,7 +19,7 @@ use alloy::providers::ProviderBuilder;
 use alloy::sol;
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Subcommand};
-use pm_rs_clob_client::safe::SafeTransaction;
+use predict_rs_clob_client::safe::SafeTransaction;
 
 use crate::cli::Cli;
 use crate::network_config::{self, NetworkConfig};
@@ -113,7 +113,7 @@ pub struct CtfWriteCommon {
     /// Path to the tenant network YAML.
     #[arg(long)]
     pub network_config: String,
-    /// Condition id, `0x...32bytes`. Output of `CTF.getConditionId` or `pm ctf condition-id`.
+    /// Condition id, `0x...32bytes`. Output of `CTF.getConditionId` or `predict-cli ctf condition-id`.
     #[arg(long)]
     pub condition_id: String,
     /// Parent collection id, `0x...32bytes`. Defaults to the zero collection (top-level
@@ -426,7 +426,7 @@ async fn run_redeem(args: &Cli, a: &RedeemArgs, fmt: Format) -> Result<()> {
             index_sets.iter().map(U256::to_string).collect::<Vec<_>>(),
         ),
     })];
-    let plan = safe_exec::assemble_plan("pm ctf redeem", &ctx, "call", nonce, ops_json, &req);
+    let plan = safe_exec::assemble_plan("predict-cli ctf redeem", &ctx, "call", nonce, ops_json, &req);
 
     if !a.common.execute {
         return safe_exec::print_plan(&plan, fmt, true, None);
@@ -484,8 +484,8 @@ impl SplitOrMerge {
     }
     fn title(self) -> &'static str {
         match self {
-            Self::Split => "pm ctf split",
-            Self::Merge => "pm ctf merge",
+            Self::Split => "predict-cli ctf split",
+            Self::Merge => "predict-cli ctf merge",
         }
     }
     fn metadata(self) -> &'static str {
@@ -561,7 +561,7 @@ async fn run_split_or_merge(
     safe_exec::print_plan(&plan, fmt, false, Some(safe_exec::final_state_json(&final_tx)))
 }
 
-// ─── pm ctf collection-id (RPC fallback) ───────────────────────────────
+// ─── predict-cli ctf collection-id (RPC fallback) ───────────────────────────────
 
 sol! {
     #[sol(rpc)]

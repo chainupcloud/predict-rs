@@ -1,4 +1,4 @@
-//! `pm wallet` subcommands — local-only key + config-file management.
+//! `predict-cli wallet` subcommands — local-only key + config-file management.
 //!
 //! Mirrors `polymarket wallet create / import / address / show / reset`. All actions touch
 //! `<config-dir>/config.toml` only; no network calls.
@@ -152,7 +152,7 @@ fn run_show(args: &Cli, fmt: Format) -> Result<()> {
                 }))?,
                 Format::Table => {
                     println!("address       : {address}");
-                    println!("safe address  : {}", safe_address.as_deref().unwrap_or("(none — run `pm wallet set-safe <addr>` or `pm wallet detect-safe`)"));
+                    println!("safe address  : {}", safe_address.as_deref().unwrap_or("(none — run `predict-cli wallet set-safe <addr>` or `predict-cli wallet detect-safe`)"));
                     println!("signature type: {}", signature_type.as_deref().unwrap_or("gnosis-safe (default)"));
                     println!("source        : {source}");
                     println!("config path   : {}", path.display());
@@ -222,7 +222,7 @@ async fn run_detect_safe(args: &Cli, fmt: Format) -> Result<()> {
         .await?;
     let safe_str = info.proxy_wallet.ok_or_else(|| {
         anyhow!(
-            "server response carried no `proxy_wallet`. Has `pm auth create-key` been run for the configured signer?"
+            "server response carried no `proxy_wallet`. Has `predict-cli auth create-key` been run for the configured signer?"
         )
     })?;
     let parsed = alloy::primitives::Address::from_str(&safe_str)
@@ -325,10 +325,10 @@ pub(crate) fn resolve_private_key(args: &Cli) -> Result<(String, String)> {
     }
     let path = config_store::config_path(args.config_dir.as_deref())?;
     let cfg = config_store::load(args.config_dir.as_deref())?
-        .ok_or_else(|| anyhow!("no private key configured: pass --private-key, set PM_PRIVATE_KEY, or run `pm wallet create`"))?;
+        .ok_or_else(|| anyhow!("no private key configured: pass --private-key, set PM_PRIVATE_KEY, or run `predict-cli wallet create`"))?;
     let pk = cfg.private_key.ok_or_else(|| {
         anyhow!(
-            "config file {} has no `private_key` entry; run `pm wallet create` or `pm wallet import`",
+            "config file {} has no `private_key` entry; run `predict-cli wallet create` or `predict-cli wallet import`",
             path.display()
         )
     })?;

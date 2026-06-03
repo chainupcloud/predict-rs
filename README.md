@@ -1,4 +1,4 @@
-# pm-rs
+# predict-rs
 
 Rust toolchain for [`pm-cup2026`](https://github.com/chainupcloud/pm-cup2026) prediction-market platform — a Polymarket V1-compatible CLOB with a multi-tenant `scopeId` extension.
 
@@ -6,8 +6,8 @@ Cargo workspace, two member crates:
 
 | Crate | Path | Purpose |
 |-------|------|---------|
-| `pm-rs-clob-client` | [`clob-client/`](clob-client/) | Rust SDK for `pm-cup2026` CLOB / Gamma / WebSocket APIs. Counterpart of [`pm-sdk-go`](https://github.com/chainupcloud/pm-sdk-go); ported from Polymarket's [`rs-clob-client`](https://github.com/Polymarket/rs-clob-client) (V1) with specific extensions: `scopeId`-extended EIP-712 `ClobAuth` / `Order` domains, `PRED_*` auth headers (vs `POLY_*`), standard-base64 HMAC encoding (vs URL-safe). |
-| `pm-cli` | [`cli/`](cli/) | `pm` binary — terminal client for `pm-cup2026`. Browse markets, place orders, manage positions. Counterpart of Polymarket's [`polymarket-cli`](https://github.com/Polymarket/polymarket-cli). |
+| `predict-rs-clob-client` | [`clob-client/`](clob-client/) | Rust SDK for `pm-cup2026` CLOB / Gamma / WebSocket APIs. Counterpart of [`pm-sdk-go`](https://github.com/chainupcloud/pm-sdk-go); ported from Polymarket's [`rs-clob-client`](https://github.com/Polymarket/rs-clob-client) (V1) with specific extensions: `scopeId`-extended EIP-712 `ClobAuth` / `Order` domains, `PRED_*` auth headers (vs `POLY_*`), standard-base64 HMAC encoding (vs URL-safe). |
+| `predict-cli` | [`cli/`](cli/) | `predict-cli` binary — terminal client for `pm-cup2026`. Browse markets, place orders, manage positions. Counterpart of Polymarket's [`polymarket-cli`](https://github.com/Polymarket/polymarket-cli). |
 
 ## Status
 
@@ -30,16 +30,16 @@ Shipped surface:
 cargo build
 
 # Point the CLI at a tenant — derives clob-api / gamma-api / clob-ws subdomains automatically.
-./target/debug/pm --tenant hermestrade.xyz ok
-./target/debug/pm --tenant hermestrade.xyz time
-./target/debug/pm --tenant hermestrade.xyz endpoints
-./target/debug/pm --tenant hermestrade.xyz midpoint <TOKEN_ID>
+./target/debug/predict-cli --tenant hermestrade.xyz ok
+./target/debug/predict-cli --tenant hermestrade.xyz time
+./target/debug/predict-cli --tenant hermestrade.xyz endpoints
+./target/debug/predict-cli --tenant hermestrade.xyz midpoint <TOKEN_ID>
 
 # Or pass the CLOB URL directly (useful for non-canonical hostnames / dev setups).
-./target/debug/pm --clob-endpoint https://clob-api.hermestrade.xyz time
+./target/debug/predict-cli --clob-endpoint https://clob-api.hermestrade.xyz time
 
 # Output as JSON (for scripting).
-./target/debug/pm --tenant hermestrade.xyz -o json time
+./target/debug/predict-cli --tenant hermestrade.xyz -o json time
 ```
 
 Env vars `PM_TENANT`, `PM_CLOB_ENDPOINT`, `PM_GAMMA_ENDPOINT`, `PM_WS_ENDPOINT`, `PM_CHAIN_ID`, `PM_SCOPE_ID` mirror the flags.
@@ -49,7 +49,7 @@ Env vars `PM_TENANT`, `PM_CLOB_ENDPOINT`, `PM_GAMMA_ENDPOINT`, `PM_WS_ENDPOINT`,
 The SDK mirrors `pm-sdk-go`'s `WithEndpoints(clob, gamma, ws)` shape:
 
 ```rust
-use pm_rs_clob_client::{Client, Endpoints};
+use predict_rs_clob_client::{Client, Endpoints};
 
 // Explicit three-URL form
 let client = Client::builder()
@@ -85,15 +85,15 @@ Upstream Polymarket clients (`rs-clob-client*`) cannot talk to `pm-cup2026` with
 ## Layout
 
 ```
-pm-rs/
+predict-rs/
 ├── Cargo.toml              # workspace
 ├── LICENSE
 ├── README.md               # this file
 ├── CLAUDE.md
 ├── docs/                   # auth-flow / orders / ws / gamma / wallet / diff-vs-polymarket-v1
 ├── examples/networks/      # reference network YAMLs (Monad / OP Sepolia / …)
-├── clob-client/            # SDK crate (pm-rs-clob-client) — see clob-client/README.md
-└── cli/                    # CLI crate (pm-cli, binary: pm) — see cli/README.md
+├── clob-client/            # SDK crate (predict-rs-clob-client) — see clob-client/README.md
+└── cli/                    # CLI crate (binary: predict-cli) — see cli/README.md
 ```
 
 ## License

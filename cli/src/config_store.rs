@@ -1,6 +1,6 @@
 //! Persistent CLI configuration on disk.
 //!
-//! The store backs `pm wallet` and is read as a fallback by every command that needs a
+//! The store backs `predict-cli wallet` and is read as a fallback by every command that needs a
 //! private key / chain id / scope id when those values are not supplied via flag or env.
 //!
 //! Resolution for the config directory:
@@ -38,7 +38,7 @@ pub struct StoredConfig {
     pub signature_type: Option<String>,
     /// Safe wallet (`bytes20` hex). Required by default `signatureType=gnosis-safe`
     /// flows since the Safe — not the EOA — holds USDC / CTF balances. Populate via
-    /// `pm wallet set-safe <addr>` (manual) or `pm wallet detect-safe` (one server call).
+    /// `predict-cli wallet set-safe <addr>` (manual) or `predict-cli wallet detect-safe` (one server call).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub safe_address: Option<String>,
 }

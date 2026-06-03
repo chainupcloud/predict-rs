@@ -1,5 +1,5 @@
-//! Shared plumbing for Safe-mode write commands (`pm approve set`, `pm ctf
-//! redeem`, `pm ctf split`, `pm ctf merge`). Each command:
+//! Shared plumbing for Safe-mode write commands (`predict-cli approve set`, `predict-cli ctf
+//! redeem`, `predict-cli ctf split`, `predict-cli ctf merge`). Each command:
 //!
 //! 1. Resolves wallet identity (EOA + Safe + scope) from the local config.
 //! 2. Builds a [`SafeTransaction`] (Call or DelegateCall+MultiSend) for its specific op.
@@ -17,10 +17,10 @@ use alloy::primitives::{Address, U256};
 use alloy::providers::ProviderBuilder;
 use alloy::sol;
 use anyhow::{Context, Result, anyhow, bail};
-use pm_rs_clob_client::relayer::{RelayerTransaction, SafeTxParams, SubmitRequest, SubmitType};
-use pm_rs_clob_client::safe::SafeTransaction;
-use pm_rs_clob_client::types::ScopeId;
-use pm_rs_clob_client::{Client, Endpoints, PMCup26Signer};
+use predict_rs_clob_client::relayer::{RelayerTransaction, SafeTxParams, SubmitRequest, SubmitType};
+use predict_rs_clob_client::safe::SafeTransaction;
+use predict_rs_clob_client::types::ScopeId;
+use predict_rs_clob_client::{Client, Endpoints, PMCup26Signer};
 use url::Url;
 
 use crate::cli::Cli;
@@ -83,7 +83,7 @@ impl SafeContext {
 
         let delegatecall = matches!(
             safe_tx.operation,
-            pm_rs_clob_client::safe::SafeOperation::DelegateCall
+            predict_rs_clob_client::safe::SafeOperation::DelegateCall
         );
         let scope_id_hex = if self.signer.scope_id().is_zero() {
             None
@@ -104,7 +104,7 @@ impl SafeContext {
         })
     }
 
-    /// Build a [`pm_rs_clob_client::Client`] from the tenant YAML, log in to gamma-service,
+    /// Build a [`predict_rs_clob_client::Client`] from the tenant YAML, log in to gamma-service,
     /// submit `req` to the relayer, and poll until terminal.
     pub async fn submit_and_poll(
         &self,
@@ -264,12 +264,12 @@ pub fn resolve_safe_address(args: &Cli) -> Result<Address> {
     use std::str::FromStr;
     let stored = crate::config_store::load(args.config_dir.as_deref())?.ok_or_else(|| {
         anyhow!(
-            "no local config — run `pm wallet create` / `pm wallet set-safe <addr>` first"
+            "no local config — run `predict-cli wallet create` / `predict-cli wallet set-safe <addr>` first"
         )
     })?;
     let raw = stored.safe_address.ok_or_else(|| {
         anyhow!(
-            "no Safe address configured: run `pm wallet set-safe <addr>` (manual) or `pm wallet detect-safe` (server)"
+            "no Safe address configured: run `predict-cli wallet set-safe <addr>` (manual) or `predict-cli wallet detect-safe` (server)"
         )
     })?;
     Address::from_str(&raw).with_context(|| format!("invalid stored safe_address '{raw}'"))
@@ -277,7 +277,7 @@ pub fn resolve_safe_address(args: &Cli) -> Result<Address> {
 
 pub fn require_signature_type_safe(args: &Cli) -> Result<()> {
     let st = crate::commands::effective_signature_type(args)?;
-    if !matches!(st, pm_rs_clob_client::types::SignatureType::PolyGnosisSafe) {
+    if !matches!(st, predict_rs_clob_client::types::SignatureType::PolyGnosisSafe) {
         bail!(
             "Safe-mode required (signatureType=gnosis-safe); current = {st:?}. Only Safe-mode writes are supported"
         );

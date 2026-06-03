@@ -5,7 +5,7 @@
 //! [`ClobWebSocketClient`] is a sub-client analogous to
 //! [`crate::gamma::GammaClient`].
 //!
-//! See `pm-rs/docs/ws.md` for the wire-format overview, and the AsyncAPI
+//! See `predict-rs/docs/ws.md` for the wire-format overview, and the AsyncAPI
 //! specs at `pm-cup2026/services/clob-service/docs/asyncapi-{market,user}.json`
 //! for the authoritative payload definitions.
 

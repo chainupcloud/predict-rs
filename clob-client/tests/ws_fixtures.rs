@@ -5,7 +5,7 @@
 //! deserialize into a unique variant, and the round-trip serialization must
 //! preserve every documented field (modulo serde defaults / `skip_serializing_if`).
 
-use pm_rs_clob_client::clob::ws::types::response::{
+use predict_rs_clob_client::clob::ws::types::response::{
     MarketEvent, OrderSide, OrderStatus, OrderSubType, TradeStatus, TraderSide, UserEvent,
 };
 

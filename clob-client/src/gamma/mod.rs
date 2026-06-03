@@ -6,7 +6,7 @@
 //! a [`GammaClient`] from a parent [`crate::Client`] via [`crate::Client::gamma`].
 //!
 //! The full endpoint table and Polymarket-comparison live in
-//! [`pm-rs/docs/gamma.md`](../../docs/gamma.md).
+//! [`predict-rs/docs/gamma.md`](../../docs/gamma.md).
 
 pub mod client;
 pub mod types;

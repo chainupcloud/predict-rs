@@ -8,9 +8,9 @@
 //! Construct a `GammaClient` via [`crate::Client::gamma`]:
 //!
 //! ```no_run
-//! use pm_rs_clob_client::{Client, gamma::types::request::ListEventsRequest};
+//! use predict_rs_clob_client::{Client, gamma::types::request::ListEventsRequest};
 //!
-//! # async fn run() -> pm_rs_clob_client::Result<()> {
+//! # async fn run() -> predict_rs_clob_client::Result<()> {
 //! let client = Client::builder().tenant("hermestrade.xyz")?.build()?;
 //! let gamma = client.gamma()?;
 //! let events = gamma.list_events(&ListEventsRequest { limit: Some(5), ..Default::default() }).await?;

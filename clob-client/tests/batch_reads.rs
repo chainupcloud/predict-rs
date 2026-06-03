@@ -1,7 +1,7 @@
 //! Integration tests for the batch read endpoints + price history.
 
-use pm_rs_clob_client::clob::types::PriceHistoryInterval;
-use pm_rs_clob_client::{Client, Endpoints, Side};
+use predict_rs_clob_client::clob::types::PriceHistoryInterval;
+use predict_rs_clob_client::{Client, Endpoints, Side};
 use serde_json::{Value, json};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};

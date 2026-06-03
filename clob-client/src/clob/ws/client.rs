@@ -141,7 +141,7 @@ impl ClobWebSocketClient {
     /// (the server's response to `"PING"` is the text frame `"PONG"`,
     /// which the connection task swallows; absence of a transport error
     /// within ~200 ms after the PING is treated as success). Used by
-    /// `pm ws ping`.
+    /// `predict-cli ws ping`.
     pub async fn ping(&self, timeout: std::time::Duration) -> Result<()> {
         let url = self.join("ws/market")?;
         let mut cfg = self.config.clone();

@@ -1,6 +1,6 @@
 # WebSocket subscriptions
 
-`pm-rs-clob-client` ships a typed client for the `clob-service` WebSocket
+`predict-rs-clob-client` ships a typed client for the `clob-service` WebSocket
 service. The server lives on port `:8082` of the same process that serves the
 REST API on `:8080`, but at distinct paths:
 
@@ -16,9 +16,9 @@ Go-side counterpart: `pm-sdk-go/pkg/ws/`.
 
 ```rust,no_run
 use futures::StreamExt as _;
-use pm_rs_clob_client::{Client, MarketSubscribeOpts};
+use predict_rs_clob_client::{Client, MarketSubscribeOpts};
 
-# async fn run() -> pm_rs_clob_client::Result<()> {
+# async fn run() -> predict_rs_clob_client::Result<()> {
 let client = Client::builder().tenant("hermestrade.xyz")?.build()?;
 let ws = client.clob_ws()?;
 
@@ -98,19 +98,19 @@ The reconnect loop **never** swallows auth failures:
 
 ```bash
 # Health check — connect, PING, expect PONG, disconnect.
-pm ws ping --tenant hermestrade.xyz
+predict-cli ws ping --tenant hermestrade.xyz
 
 # Subscribe to one or more asset ids, print N events, then exit.
-pm ws book --tenant hermestrade.xyz 1234 5678 --level 2 --count 5
+predict-cli ws book --tenant hermestrade.xyz 1234 5678 --level 2 --count 5
 
 # Live ticker — prints best-of-book updates per frame; Ctrl-C to exit.
-pm ws book-watch --tenant hermestrade.xyz 1234
+predict-cli ws book-watch --tenant hermestrade.xyz 1234
 
 # JSON-per-line mode for piping to jq.
-pm ws book-watch --tenant hermestrade.xyz 1234 --print-as-json
+predict-cli ws book-watch --tenant hermestrade.xyz 1234 --print-as-json
 
 # User channel — auto-derives credentials via /auth/derive-api-key.
-pm ws user \
+predict-cli ws user \
   --tenant hermestrade.xyz \
   --chain-id 11155420 \
   --private-key "$PM_PRIVATE_KEY" \

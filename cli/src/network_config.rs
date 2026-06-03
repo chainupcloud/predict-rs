@@ -1,11 +1,11 @@
 //! Tenant network configuration loaded from YAML.
 //!
-//! Mirrors the schema of `examples/networks/monad-hermestrade.yaml`. Used by `pm approve`
-//! (and later `pm setup`) to find the chain id, RPC endpoint, USDC / CTF / Exchange / Safe
+//! Mirrors the schema of `examples/networks/monad-hermestrade.yaml`. Used by `predict-cli approve`
+//! (and later `predict-cli setup`) to find the chain id, RPC endpoint, USDC / CTF / Exchange / Safe
 //! contract addresses, and the spender / operator targets a user wallet must authorise to
 //! trade.
 //!
-//! Per `pm-rs/CLAUDE.md`: no contract address may live in SDK source. This loader keeps
+//! Per `predict-rs/CLAUDE.md`: no contract address may live in SDK source. This loader keeps
 //! tenant-specific addresses caller-supplied — the CLI loads `--network-config <path>`,
 //! the SDK reads only what the caller passes in.
 

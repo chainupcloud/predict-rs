@@ -3,12 +3,12 @@
 
 use httpmock::Method::{GET, POST};
 use httpmock::MockServer;
-use pm_rs_clob_client::gamma::types::request::{
+use predict_rs_clob_client::gamma::types::request::{
     CommentsByUserAddressRequest, GetSeriesRequest, ListCommentsRequest, ListCurationEventsRequest,
     ListEventCreatorsRequest, ListEventsRequest, ListSeriesRequest, ListTagsRequest,
     RelatedTagsRequest, SearchRequest,
 };
-use pm_rs_clob_client::gamma::GammaClient;
+use predict_rs_clob_client::gamma::GammaClient;
 use reqwest::Client as HttpClient;
 use url::Url;
 
@@ -499,6 +499,6 @@ async fn api_error_response_surfaces_status_code_and_body() {
 #[tokio::test]
 async fn gamma_accessor_requires_endpoint() {
     // No gamma endpoint configured -> Client::gamma() returns Validation error.
-    let client = pm_rs_clob_client::Client::new("https://clob-api.example.com").unwrap();
+    let client = predict_rs_clob_client::Client::new("https://clob-api.example.com").unwrap();
     assert!(client.gamma().is_err());
 }

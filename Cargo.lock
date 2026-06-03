@@ -3477,68 +3477,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pm-cli"
-version = "0.1.0"
-dependencies = [
- "alloy",
- "anyhow",
- "chrono",
- "clap",
- "dirs",
- "futures",
- "futures-util",
- "hex",
- "pm-rs-clob-client",
- "rust_decimal",
- "rustls",
- "rustyline",
- "secrecy",
- "serde",
- "serde_json",
- "serde_yaml",
- "tabled",
- "tempfile",
- "tokio",
- "toml",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "pm-rs-clob-client"
-version = "0.1.0"
-dependencies = [
- "alloy",
- "alloy-sol-types",
- "async-trait",
- "base64 0.22.1",
- "chrono",
- "futures",
- "futures-util",
- "hex",
- "hmac",
- "httpmock",
- "rand 0.9.4",
- "reqwest 0.13.1",
- "rust_decimal",
- "rust_decimal_macros",
- "secrecy",
- "serde",
- "serde_html_form",
- "serde_json",
- "serde_with",
- "sha2",
- "thiserror 2.0.18",
- "tokio",
- "tokio-stream",
- "tokio-tungstenite",
- "tracing",
- "url",
- "uuid",
- "wiremock",
-]
-
-[[package]]
 name = "polling"
 version = "3.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3581,6 +3519,68 @@ name = "precomputed-hash"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
+
+[[package]]
+name = "predict-cli"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "chrono",
+ "clap",
+ "dirs",
+ "futures",
+ "futures-util",
+ "hex",
+ "predict-rs-clob-client",
+ "rust_decimal",
+ "rustls",
+ "rustyline",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tabled",
+ "tempfile",
+ "tokio",
+ "toml",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "predict-rs-clob-client"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "alloy-sol-types",
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "futures",
+ "futures-util",
+ "hex",
+ "hmac",
+ "httpmock",
+ "rand 0.9.4",
+ "reqwest 0.13.1",
+ "rust_decimal",
+ "rust_decimal_macros",
+ "secrecy",
+ "serde",
+ "serde_html_form",
+ "serde_json",
+ "serde_with",
+ "sha2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite",
+ "tracing",
+ "url",
+ "uuid",
+ "wiremock",
+]
 
 [[package]]
 name = "prettyplease"

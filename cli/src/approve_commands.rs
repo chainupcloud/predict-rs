@@ -1,4 +1,4 @@
-//! `pm approve` subcommands.
+//! `predict-cli approve` subcommands.
 //!
 //! - `check` reads `IERC20.allowance(owner, spender)` and `IERC1155.isApprovedForAll`
 //!   per the tenant YAML's approval targets. No on-chain writes.
@@ -20,8 +20,8 @@ use alloy::providers::ProviderBuilder;
 use alloy::sol;
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Subcommand, ValueEnum};
-use pm_rs_clob_client::safe::multisend::SafeSubOp;
-use pm_rs_clob_client::safe::{self, SafeTransaction};
+use predict_rs_clob_client::safe::multisend::SafeSubOp;
+use predict_rs_clob_client::safe::{self, SafeTransaction};
 
 use crate::cli::Cli;
 use crate::network_config::{self, ApprovalTarget, NetworkConfig};
@@ -216,7 +216,7 @@ fn resolve_owner(args: &Cli, override_address: Option<&str>) -> Result<Address> 
         return parse_addr(s).with_context(|| format!("invalid --address '{s}'"));
     }
     let sig_type = crate::commands::effective_signature_type(args)?;
-    if sig_type == pm_rs_clob_client::types::SignatureType::Eoa {
+    if sig_type == predict_rs_clob_client::types::SignatureType::Eoa {
         let (pk, _source) = crate::wallet_commands::resolve_private_key(args)?;
         let signer = parse_signer(&pk)?;
         return Ok(signer.address());
@@ -229,8 +229,8 @@ fn resolve_owner(args: &Cli, override_address: Option<&str>) -> Result<Address> 
         .ok_or_else(|| {
             anyhow!(
                 "owner unresolved: signature_type={sig_type:?} needs a Safe address. Either:\n\
-                 - run `pm wallet detect-safe` (fetches it from the server, requires L2 creds), or\n\
-                 - run `pm wallet set-safe <addr>` (paste it yourself), or\n\
+                 - run `predict-cli wallet detect-safe` (fetches it from the server, requires L2 creds), or\n\
+                 - run `predict-cli wallet set-safe <addr>` (paste it yourself), or\n\
                  - pass `--address <addr>` explicitly, or\n\
                  - re-run with `--signature-type eoa` to check the EOA instead."
             )
@@ -306,7 +306,7 @@ fn print_statuses(
     }
 }
 
-// ─── pm approve set ─────────────────────────────────────────────────────
+// ─── predict-cli approve set ─────────────────────────────────────────────────────
 
 /// `usdw.approve(spender, amount)` selector — keccak256("approve(address,uint256)")[..4].
 const ERC20_APPROVE_SELECTOR: [u8; 4] = [0x09, 0x5e, 0xa7, 0xb3];
@@ -486,7 +486,7 @@ async fn run_set(args: &Cli, a: &SetArgs, fmt: Format) -> Result<()> {
         .map(|p| serde_json::json!({ "summary": p.summary, "detail": p.detail }))
         .collect();
     let plan = safe_exec::assemble_plan(
-        "pm approve set",
+        "predict-cli approve set",
         &ctx,
         op_label,
         nonce,
