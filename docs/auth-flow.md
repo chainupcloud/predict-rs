@@ -1,6 +1,6 @@
-# pm-rs auth flow
+# predict-rs auth flow
 
-This document describes the L1 (EIP-712) and L2 (HMAC-SHA256) authentication used by `pm-rs-clob-client`, including the Safe-wallet derivation note.
+This document describes the L1 (EIP-712) and L2 (HMAC-SHA256) authentication used by `predict-rs-clob-client`, including the Safe-wallet derivation note.
 
 Authoritative server-side references:
 - `pm-cup2026/services/clob-service/internal/tradingapi/handlers/auth.go` — L1 verification.

@@ -1,6 +1,6 @@
-# pm-rs vs Polymarket V1 — differences
+# predict-rs vs Polymarket V1 — differences
 
-> **Scope:** `pm-rs` mirrors Polymarket V1 (`rs-clob-client` v0.4 + `polymarket-cli` v0.1.4) functionally. This document lists **only the differences**; anything not listed here is unchanged or carried over directly.
+> **Scope:** `predict-rs` mirrors Polymarket V1 (`rs-clob-client` v0.4 + `polymarket-cli` v0.1.4) functionally. This document lists **only the differences**; anything not listed here is unchanged or carried over directly.
 
 Last updated: 2026-05-28.
 
@@ -8,19 +8,19 @@ Last updated: 2026-05-28.
 
 ## 1. Crate naming and distribution
 
-| Dimension | Polymarket V1 | pm-rs |
+| Dimension | Polymarket V1 | predict-rs |
 |-----------|---------------|-------|
-| SDK crate name | `polymarket-client-sdk` (hyphenated) | `pm-rs-clob-client` (hyphenated) |
-| CLI crate name | `polymarket-cli` | `pm-cli` |
-| CLI binary name | `polymarket` | `pm` |
-| Repository layout | Two independent git repos | Single Cargo workspace `pm-rs/{clob-client, cli}` |
+| SDK crate name | `polymarket-client-sdk` (hyphenated) | `predict-rs-clob-client` (hyphenated) |
+| CLI crate name | `polymarket-cli` | `predict-cli` |
+| CLI binary name | `polymarket` | `predict-cli` |
+| Repository layout | Two independent git repos | Single Cargo workspace `predict-rs/{clob-client, cli}` |
 | Config directory | `~/.config/polymarket/config.json` | `~/.config/pm/config.toml` — see [`docs/wallet.md`](wallet.md). Path overridable via `--config-dir` / `PM_CONFIG_DIR`; file mode 0600, parent dir 0700, atomic-rename writes. |
 
 ---
 
 ## 2. Networks and collateral
 
-| Dimension | Polymarket V1 | pm-rs |
+| Dimension | Polymarket V1 | predict-rs |
 |-----------|---------------|-------|
 | Default chain | Polygon (chainId 137) | OP Sepolia (chainId 11155420) |
 | Supported chains | Polygon + Amoy (hard-coded `phf::Map`) | **Any configurable EVM** (Monad / OP Sepolia / custom); hard-coding is forbidden |
@@ -37,7 +37,7 @@ Last updated: 2026-05-28.
 
 ### ClobAuth (L1 authentication)
 
-| Dimension | Polymarket V1 | pm-rs |
+| Dimension | Polymarket V1 | predict-rs |
 |-----------|---------------|-------|
 | Domain name | `"ClobAuthDomain"` | `"ClobAuthDomain"` (same) |
 | Domain version | `"1"` | `"1"` (same) |
@@ -48,7 +48,7 @@ Last updated: 2026-05-28.
 
 ### Order (order signing)
 
-| Dimension | Polymarket V1 | pm-rs |
+| Dimension | Polymarket V1 | predict-rs |
 |-----------|---------------|-------|
 | Domain name | `"Polymarket CTF Exchange"` | **`"Prediction Market Protocol"`** |
 | Domain version | `"1"` | `"1"` (same) |
@@ -56,13 +56,13 @@ Last updated: 2026-05-28.
 | Field count | 12 | **13** |
 | Appended field | — | **`bytes32 scopeId`** |
 
-> Polymarket V2 moves `expiration` out of the signed domain and adds `timestamp / metadata / builder`; `pm-rs` does **not** follow V2 and keeps the V1 field layout plus `scopeId`.
+> Polymarket V2 moves `expiration` out of the signed domain and adds `timestamp / metadata / builder`; `predict-rs` does **not** follow V2 and keeps the V1 field layout plus `scopeId`.
 
 ---
 
 ## 4. Signature types
 
-| Value | Polymarket V1 | pm-rs |
+| Value | Polymarket V1 | predict-rs |
 |-------|---------------|-------|
 | 0 | `Eoa` | `Eoa` (same) |
 | 1 | `Proxy` (Magic / email) | `PolyProxy` (same semantics) |
@@ -75,7 +75,7 @@ Last updated: 2026-05-28.
 
 ## 5. HTTP headers and encodings
 
-| Dimension | Polymarket V1 | pm-rs |
+| Dimension | Polymarket V1 | predict-rs |
 |-----------|---------------|-------|
 | Auth-header prefix | `POLY_*` | **`PRED_*`** |
 | L1: signature headers | `POLY_ADDRESS / POLY_NONCE / POLY_SIGNATURE / POLY_TIMESTAMP` | `PRED_ADDRESS / PRED_NONCE / PRED_SIGNATURE / PRED_TIMESTAMP` |
@@ -93,7 +93,7 @@ Last updated: 2026-05-28.
 
 ### Path / behavior differences
 
-| Endpoint | Polymarket V1 | pm-rs |
+| Endpoint | Polymarket V1 | predict-rs |
 |----------|---------------|-------|
 | `GET /time` | JSON object `{"time": ...}` | **Bare integer** body |
 | `GET /midpoint` | `{"mid": ...}` | `{"price": ...}` (the response decoder accepts the legacy `mid` alias too) |
@@ -107,7 +107,7 @@ Last updated: 2026-05-28.
 | `GET /trades` | V1: `before`/`after` filters | Adds `from_id` (snowflake ASC cursor) + `limit ∈ [1, 1000]`; SDK supports the full filter matrix and auto-fills `maker_address` from the configured L2 signer. |
 | `POST /self-trade` | — | **Platform-only** (internal port `:8083`, used for market-maker price-history backfill / mirroring) |
 
-### V1 endpoints `pm-rs` will not implement
+### V1 endpoints `predict-rs` will not implement
 
 | Module | Reason |
 |--------|--------|
@@ -115,7 +115,7 @@ Last updated: 2026-05-28.
 | `data` (on-chain data aggregator) | `pm-cup2026` uses its own subgraph, different protocol |
 | `rtds` (real-time data stream) | Polymarket proprietary |
 | `rfq` (request for quote) | Polymarket proprietary |
-| `ctf` (EOA-broadcast split / merge / redeem) | Only Safe-mode writes are supported (`signatureType=2`). The CLI ships `pm ctf split / merge / redeem` against the `relayer-service` (Safe meta-tx), but the EOA-direct broadcast variant Polymarket V1 ships is intentionally not provided. |
+| `ctf` (EOA-broadcast split / merge / redeem) | Only Safe-mode writes are supported (`signatureType=2`). The CLI ships `predict-cli ctf split / merge / redeem` against the `relayer-service` (Safe meta-tx), but the EOA-direct broadcast variant Polymarket V1 ships is intentionally not provided. |
 | `gamma` streaming | `pm-cup2026` `gamma-service` is REST-only; no stream. REST surface is shipped — see [`docs/gamma.md`](gamma.md). |
 
 ### Polymarket V1 CLOB endpoints not in `clob-service` (verified 2026-05-19)
@@ -137,21 +137,21 @@ Cross-checked against `pm-cup2026/services/clob-service/internal/tradingapi/serv
 
 ### Polymarket V1 endpoints with a different verb / shape
 
-| Polymarket V1 | pm-rs | Notes |
+| Polymarket V1 | predict-rs | Notes |
 |---------------|---------|-------|
-| `GET /midpoints` | `POST /midpoints` (also `GET`) | Batch midpoints. SDK call: `Client::midpoints(&[token_id])`. CLI: `pm midpoints t1 t2 ...`. |
-| `GET /prices` (batch) | `POST /prices` | SDK call: `Client::prices(&[(token, side)])`. CLI: `pm prices t1:buy t2:sell ...`. |
-| `GET /spreads` (batch) | `POST /spreads` | SDK call: `Client::spreads(&[token_id])`. CLI: `pm spreads t1 t2 ...`. |
-| `GET /books` (batch) | `POST /books` | SDK call: `Client::books(&[(token, side)])` → `Vec<Option<OrderBookSummary>>`. CLI: `pm books t1:buy t2:sell ...`. |
-| `GET /last-trades-prices` | `GET|POST /last-trades-prices` | Both verbs accepted; SDK sends POST. SDK call: `Client::last_trades_prices(&[token_id])` (capped at 500 client-side). CLI: `pm last-trades t1 t2 ...`. |
-| `GET /price-history?fidelity=...` | `GET /price-history?interval=...` | Supported intervals: `1H | 6H | 1D | 1W | 1M | ALL`. **No `1m` minute granularity.** SDK call: `Client::price_history(token_id, interval, fidelity, limit)`. CLI: `pm price-history <token> --interval 1h`. |
+| `GET /midpoints` | `POST /midpoints` (also `GET`) | Batch midpoints. SDK call: `Client::midpoints(&[token_id])`. CLI: `predict-cli midpoints t1 t2 ...`. |
+| `GET /prices` (batch) | `POST /prices` | SDK call: `Client::prices(&[(token, side)])`. CLI: `predict-cli prices t1:buy t2:sell ...`. |
+| `GET /spreads` (batch) | `POST /spreads` | SDK call: `Client::spreads(&[token_id])`. CLI: `predict-cli spreads t1 t2 ...`. |
+| `GET /books` (batch) | `POST /books` | SDK call: `Client::books(&[(token, side)])` → `Vec<Option<OrderBookSummary>>`. CLI: `predict-cli books t1:buy t2:sell ...`. |
+| `GET /last-trades-prices` | `GET|POST /last-trades-prices` | Both verbs accepted; SDK sends POST. SDK call: `Client::last_trades_prices(&[token_id])` (capped at 500 client-side). CLI: `predict-cli last-trades t1 t2 ...`. |
+| `GET /price-history?fidelity=...` | `GET /price-history?interval=...` | Supported intervals: `1H | 6H | 1D | 1W | 1M | ALL`. **No `1m` minute granularity.** SDK call: `Client::price_history(token_id, interval, fidelity, limit)`. CLI: `predict-cli price-history <token> --interval 1h`. |
 | `POST /balance-allowance/update` | `GET /balance-allowance/update` | Verb difference; SDK already implements via `update_balance_allowance`. |
 
 ---
 
 ## 7. Order construction and fees
 
-| Dimension | Polymarket V1 | pm-rs |
+| Dimension | Polymarket V1 | predict-rs |
 |-----------|---------------|-------|
 | Price precision | tick size 0.01 / 0.001 / 0.0001 | Same (`pm-cup2026` inherits the same rules) — enforced by `OrderBuilder::minimum_tick_size` |
 | Token / USDC precision | 6 decimals | Same — `to_base_units` uses `Truncate(6).Shift(6)` matching `pm-sdk-go::toBaseUnits` |
@@ -167,7 +167,7 @@ Cross-checked against `pm-cup2026/services/clob-service/internal/tradingapi/serv
 
 ## 8. SDK engineering structure
 
-| Dimension | Polymarket V1 | pm-rs |
+| Dimension | Polymarket V1 | predict-rs |
 |-----------|---------------|-------|
 | Client state machine | Type-state pattern (`Client<Unauthenticated>` → `Client<Authenticated<K>>`) | **Single `Client` struct + `Option<Credentials>` + `Option<signer_address>`** — credentials and the L1 signer address are attached at build time via `ClientBuilder::credentials` / `signer_address` (no Builder / Normal / AWS-KMS Kind tiers) |
 | Builder authentication | `promote_to_builder(BuilderConfig)` + remote signer service | Not implemented (no user requirement yet) |
@@ -185,7 +185,7 @@ Cross-checked against `pm-cup2026/services/clob-service/internal/tradingapi/serv
 
 ## 9. Error model
 
-| Dimension | Polymarket V1 | pm-rs |
+| Dimension | Polymarket V1 | predict-rs |
 |-----------|---------------|-------|
 | Top-level error type | Layered enum with `downcast_ref::<Validation>()` | **Flat `thiserror`-based enum** |
 | Variant matching | `match err.kind()` plus downcast | `match err` directly on the variant |
@@ -194,7 +194,7 @@ Cross-checked against `pm-cup2026/services/clob-service/internal/tradingapi/serv
 
 ## 10. Future strategy regarding V2
 
-`pm-rs` does **not** plan a wholesale migration to the Polymarket V2 SDK design (`OrderPayload` enum, `Poly1271`, dual-protocol auto-detection). If `pm-cup2026`'s on-chain contracts ever adopt a V2-equivalent structure, this decision will be revisited.
+`predict-rs` does **not** plan a wholesale migration to the Polymarket V2 SDK design (`OrderPayload` enum, `Poly1271`, dual-protocol auto-detection). If `pm-cup2026`'s on-chain contracts ever adopt a V2-equivalent structure, this decision will be revisited.
 
 V2 ideas worth borrowing **selectively** (not adopted wholesale):
 
@@ -209,7 +209,7 @@ V2 ideas worth borrowing **selectively** (not adopted wholesale):
 Signing parity is the single biggest behavioral difference vs Polymarket V1 and the single biggest similarity vs `pm-sdk-go`. Byte-level parity is enforced by:
 
 ```bash
-cargo test -p pm-rs-clob-client --test golden_signer
+cargo test -p predict-rs-clob-client --test golden_signer
 ```
 
 The fixtures (`clob-client/tests/fixtures/golden.json`) are a snapshot of `pm-sdk-go/pkg/signer/testdata/golden.json`. **Any signer change must clear this test before further work is layered on top.**

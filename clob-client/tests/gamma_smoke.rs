@@ -15,8 +15,8 @@
 //! It does NOT assert a specific non-empty list because the tenant may not yet
 //! have published events. The point is to verify the wire format hasn't drifted.
 
-use pm_rs_clob_client::gamma::types::request::ListEventsRequest;
-use pm_rs_clob_client::Client;
+use predict_rs_clob_client::gamma::types::request::ListEventsRequest;
+use predict_rs_clob_client::Client;
 
 #[tokio::test]
 #[ignore = "live network — run with `cargo test --workspace -- --ignored gamma_smoke`"]

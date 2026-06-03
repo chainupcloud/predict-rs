@@ -1,4 +1,4 @@
-//! `pm setup` — guided first-time configuration wizard.
+//! `predict-cli setup` — guided first-time configuration wizard.
 //!
 //! Mirrors `polymarket setup`'s shape (banner → numbered steps with stdin prompts → "next
 //! steps" footer) but adapted for multi-tenant, scopeId-extended, Safe-backed
@@ -10,8 +10,8 @@
 use std::io::{self, BufRead, Write};
 
 use anyhow::{Context, Result};
-use pm_rs_clob_client::types::ScopeId;
-use pm_rs_clob_client::{Client, Credentials, PMCup26Signer};
+use predict_rs_clob_client::types::ScopeId;
+use predict_rs_clob_client::{Client, Credentials, PMCup26Signer};
 use secrecy::ExposeSecret as _;
 
 use crate::cli::Cli;
@@ -101,7 +101,7 @@ pub async fn run(args: &Cli) -> Result<()> {
             }
             None => {
                 println!("  In gnosis-safe mode the EOA signs but the Safe holds funds.");
-                let s = prompt("  Safe address (0x…), or blank to skip and run `pm wallet detect-safe` later: ")?;
+                let s = prompt("  Safe address (0x…), or blank to skip and run `predict-cli wallet detect-safe` later: ")?;
                 if s.is_empty() { None } else { Some(s) }
             }
         }
@@ -133,7 +133,7 @@ pub async fn run(args: &Cli) -> Result<()> {
         write_credentials(&creds_path, &creds)?;
         println!("  ✓ Credentials saved to {}", creds_path.display());
     } else {
-        println!("  ○ Skipped. Run `pm auth create-key` later when ready.");
+        println!("  ○ Skipped. Run `predict-cli auth create-key` later when ready.");
     }
     println!();
 
@@ -142,10 +142,10 @@ pub async fn run(args: &Cli) -> Result<()> {
     println!("  ✓ Setup complete!");
     println!();
     println!("  Next steps:");
-    println!("    pm balance --asset-type collateral");
-    println!("    pm approve check --network-config <yaml>");
-    println!("    pm gamma events list --limit 5");
-    println!("    pm shell");
+    println!("    predict-cli balance --asset-type collateral");
+    println!("    predict-cli approve check --network-config <yaml>");
+    println!("    predict-cli gamma events list --limit 5");
+    println!("    predict-cli shell");
     println!();
     Ok(())
 }
@@ -203,7 +203,7 @@ fn setup_wallet(args: &Cli) -> Result<String> {
         println!("  ✓ Wallet imported");
         Ok(key)
     } else {
-        // Generate a fresh key via the same path as `pm wallet create`.
+        // Generate a fresh key via the same path as `predict-cli wallet create`.
         let key = generate_random_key();
         let addr = address_for(&key)?;
         println!("  ✓ Wallet created");
@@ -245,7 +245,7 @@ fn address_for(key: &str) -> Result<String> {
 }
 
 fn generate_random_key() -> String {
-    // Reuse the same primitive `pm wallet create` uses (alloy's k256 RNG) so a key
+    // Reuse the same primitive `predict-cli wallet create` uses (alloy's k256 RNG) so a key
     // minted here is interchangeable with one minted via the wallet subcommand.
     let signer = alloy::signers::local::PrivateKeySigner::random();
     format!("0x{}", hex::encode(signer.to_bytes()))

@@ -1,7 +1,7 @@
 # Orders
 
-`pm-rs-clob-client` exposes order construction, signing, submission, cancellation, and
-order / trade query endpoints, plus the matching `pm order …` / `pm trade …` CLI
+`predict-rs-clob-client` exposes order construction, signing, submission, cancellation, and
+order / trade query endpoints, plus the matching `predict-cli order …` / `predict-cli trade …` CLI
 subcommands.
 
 ## Lifecycle
@@ -87,14 +87,14 @@ For `signatureType = 0` (EOA) the SDK enforces `maker == signer` client-side.
 ## SDK example
 
 ```rust
-use pm_rs_clob_client::{
+use predict_rs_clob_client::{
     Client, ClientBuilder, Endpoints, PMCup26Signer, Side, SignatureType,
 };
-use pm_rs_clob_client::clob::types::OrderType;
-use pm_rs_clob_client::types::{ScopeId, U256};
+use predict_rs_clob_client::clob::types::OrderType;
+use predict_rs_clob_client::types::{ScopeId, U256};
 use rust_decimal_macros::dec;
 
-# async fn run() -> pm_rs_clob_client::Result<()> {
+# async fn run() -> predict_rs_clob_client::Result<()> {
 let signer = PMCup26Signer::from_hex(&std::env::var("PM_PRIVATE_KEY").unwrap(), 11_155_420)?
     .with_scope_id(ScopeId::from_hex("0x42").unwrap())
     .with_exchange("0xC6e9081EcaD84AfB3a772933Fb865AB8A9C317d9".parse().unwrap());
@@ -135,7 +135,7 @@ println!("orderID={} status={}", resp.order_id, resp.status);
 
 ```bash
 # Place a limit BUY for 100 @ 0.34, scope 0x42 on OP Sepolia.
-pm --tenant hermestrade.xyz \
+predict-cli --tenant hermestrade.xyz \
    --chain-id 11155420 --scope-id 0x42 \
    --private-key "$PM_PRIVATE_KEY" \
    --exchange-address 0xC6e9... \
@@ -146,29 +146,29 @@ pm --tenant hermestrade.xyz \
    --signature-type gnosis-safe
 
 # Dry-run: print the signed envelope JSON, do NOT POST.
-pm ... order create --token 100 ... --dry-run
+predict-cli ... order create --token 100 ... --dry-run
 
 # Cancel single / batch / market.
-pm ... order cancel snowflake-1
-pm ... order cancel-many id1,id2,id3
-pm ... order cancel-market --asset-id 100
-pm ... order cancel-all
+predict-cli ... order cancel snowflake-1
+predict-cli ... order cancel-many id1,id2,id3
+predict-cli ... order cancel-market --asset-id 100
+predict-cli ... order cancel-all
 
 # Open orders + filters.
-pm ... order list --market 0xcondition --status all
-pm ... order get snowflake-1
+predict-cli ... order list --market 0xcondition --status all
+predict-cli ... order get snowflake-1
 
 # Replace (cancel old + place new) — `--orders-file` accepts an array of SendOrder
-# envelopes (produced by `pm order create --dry-run`).
-pm ... order replace --cancel id1,id2 --orders-file new.json
+# envelopes (produced by `predict-cli order create --dry-run`).
+predict-cli ... order replace --cancel id1,id2 --orders-file new.json
 
 # Trades.
-pm ... trade --asset-id 100 --from-id 1000 --limit 50
-pm ... trade --asset-id 100 --builder              # GET /builder/trades
+predict-cli ... trade --asset-id 100 --from-id 1000 --limit 50
+predict-cli ... trade --asset-id 100 --builder              # GET /builder/trades
 
 # Maker-program ops.
-pm ... order scoring snowflake-1
-pm ... heartbeat
+predict-cli ... order scoring snowflake-1
+predict-cli ... heartbeat
 ```
 
 ## Wire-format reminder

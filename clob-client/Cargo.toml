@@ -1,5 +1,5 @@
 [package]
-name = "pm-rs-clob-client"
+name = "predict-rs-clob-client"
 version = "0.1.0"
 description = "pm-cup2026 CLOB Rust client SDK"
 keywords = ["polymarket", "clob", "prediction-market"]

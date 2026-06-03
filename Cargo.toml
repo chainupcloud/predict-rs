@@ -10,7 +10,7 @@ edition = "2024"
 rust-version = "1.88.0"
 license = "MIT"
 authors = []
-repository = "https://github.com/chainupcloud/pm-rs"
+repository = "https://github.com/chainupcloud/predict-rs"
 
 [workspace.dependencies]
 # crypto / chain

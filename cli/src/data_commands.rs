@@ -10,7 +10,7 @@
 
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
-use pm_rs_clob_client::Client;
+use predict_rs_clob_client::Client;
 
 use crate::output::{self, Format};
 

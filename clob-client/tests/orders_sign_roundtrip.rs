@@ -14,11 +14,11 @@
 //!    `"0"`, scopeId 0x-prefixed 64 hex chars).
 //! 3. Round-tripping the JSON through `serde` recovers an equal `SignedOrder`.
 
-use pm_rs_clob_client::clob::order_builder::{normalize_ecdsa_v, signed_order_from};
-use pm_rs_clob_client::clob::types::{OrderType, SignableOrder, SignedOrder};
-use pm_rs_clob_client::signer::OrderForSigning;
-use pm_rs_clob_client::types::{Address, ScopeId, SignatureType, U256, Side};
-use pm_rs_clob_client::PMCup26Signer;
+use predict_rs_clob_client::clob::order_builder::{normalize_ecdsa_v, signed_order_from};
+use predict_rs_clob_client::clob::types::{OrderType, SignableOrder, SignedOrder};
+use predict_rs_clob_client::signer::OrderForSigning;
+use predict_rs_clob_client::types::{Address, ScopeId, SignatureType, U256, Side};
+use predict_rs_clob_client::PMCup26Signer;
 
 const PRIVATE_KEY: &str = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 const CHAIN_ID: u64 = 137;
@@ -165,8 +165,8 @@ fn signed_order_json_round_trip() {
 
 #[test]
 fn buy_amounts_via_builder_match_formula() {
-    use pm_rs_clob_client::clob::order_builder::OrderBuilder;
-    use pm_rs_clob_client::clob::order_builder::Limit;
+    use predict_rs_clob_client::clob::order_builder::OrderBuilder;
+    use predict_rs_clob_client::clob::order_builder::Limit;
     use rust_decimal_macros::dec;
     // BUY 100 @ 0.34 produces makerAmount = 34_000_000 (USDC), takerAmount = 100_000_000 (tok).
     let signable = OrderBuilder::<Limit>::limit()
@@ -187,8 +187,8 @@ fn buy_amounts_via_builder_match_formula() {
 
 #[test]
 fn sell_amounts_via_builder_match_formula() {
-    use pm_rs_clob_client::clob::order_builder::OrderBuilder;
-    use pm_rs_clob_client::clob::order_builder::Limit;
+    use predict_rs_clob_client::clob::order_builder::OrderBuilder;
+    use predict_rs_clob_client::clob::order_builder::Limit;
     use rust_decimal_macros::dec;
     let signable = OrderBuilder::<Limit>::limit()
         .token_id(U256::from(100u64))
@@ -208,8 +208,8 @@ fn sell_amounts_via_builder_match_formula() {
 
 #[test]
 fn build_and_sign_via_builder_normalises_v() {
-    use pm_rs_clob_client::clob::order_builder::OrderBuilder;
-    use pm_rs_clob_client::clob::order_builder::Limit;
+    use predict_rs_clob_client::clob::order_builder::OrderBuilder;
+    use predict_rs_clob_client::clob::order_builder::Limit;
     use rust_decimal_macros::dec;
     let signer = PMCup26Signer::from_hex(PRIVATE_KEY, CHAIN_ID)
         .unwrap()

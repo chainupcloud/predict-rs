@@ -12,16 +12,16 @@
 use anyhow::{Context, anyhow};
 use chrono::DateTime;
 use clap::{Args, Subcommand};
-use pm_rs_clob_client::gamma::types::request::{
+use predict_rs_clob_client::gamma::types::request::{
     CommentsByUserAddressRequest, GetSeriesRequest, ListCommentsRequest, ListCurationEventsRequest,
     ListEventCreatorsRequest, ListEventsRequest, ListSeriesRequest, ListTagsRequest,
     RelatedTagsRequest, SearchRequest,
 };
-use pm_rs_clob_client::gamma::types::response::{
+use predict_rs_clob_client::gamma::types::response::{
     Agreement, Comment, CurationEvent, Event, EventCreator, Market, Profile, PublicInfo,
     PublicProfile, RelatedTag, Search, Series, SeriesSummary, SportType, Tag,
 };
-use pm_rs_clob_client::Client;
+use predict_rs_clob_client::Client;
 use tabled::Tabled;
 
 use crate::output::{self, Format};
@@ -402,7 +402,7 @@ pub async fn run(client: Client, fmt: Format, args: GammaArgs) -> anyhow::Result
 }
 
 async fn run_events(
-    gamma: &pm_rs_clob_client::gamma::GammaClient,
+    gamma: &predict_rs_clob_client::gamma::GammaClient,
     args: EventsArgs,
     fmt: Format,
 ) -> anyhow::Result<()> {
@@ -460,7 +460,7 @@ async fn run_events(
 }
 
 async fn run_markets(
-    gamma: &pm_rs_clob_client::gamma::GammaClient,
+    gamma: &predict_rs_clob_client::gamma::GammaClient,
     args: MarketsArgs,
     fmt: Format,
 ) -> anyhow::Result<()> {
@@ -494,7 +494,7 @@ async fn run_markets(
 }
 
 async fn run_tags(
-    gamma: &pm_rs_clob_client::gamma::GammaClient,
+    gamma: &predict_rs_clob_client::gamma::GammaClient,
     args: TagsArgs,
     fmt: Format,
 ) -> anyhow::Result<()> {
@@ -550,7 +550,7 @@ async fn run_tags(
 }
 
 async fn run_series(
-    gamma: &pm_rs_clob_client::gamma::GammaClient,
+    gamma: &predict_rs_clob_client::gamma::GammaClient,
     args: SeriesArgs,
     fmt: Format,
 ) -> anyhow::Result<()> {
@@ -594,7 +594,7 @@ async fn run_series(
 }
 
 async fn run_comments(
-    gamma: &pm_rs_clob_client::gamma::GammaClient,
+    gamma: &predict_rs_clob_client::gamma::GammaClient,
     args: CommentsArgs,
     fmt: Format,
 ) -> anyhow::Result<()> {
@@ -630,7 +630,7 @@ async fn run_comments(
 }
 
 async fn run_profiles(
-    gamma: &pm_rs_clob_client::gamma::GammaClient,
+    gamma: &predict_rs_clob_client::gamma::GammaClient,
     args: ProfilesArgs,
     fmt: Format,
 ) -> anyhow::Result<()> {
@@ -648,7 +648,7 @@ async fn run_profiles(
 }
 
 async fn run_curation(
-    gamma: &pm_rs_clob_client::gamma::GammaClient,
+    gamma: &predict_rs_clob_client::gamma::GammaClient,
     args: CurationArgs,
     fmt: Format,
 ) -> anyhow::Result<()> {

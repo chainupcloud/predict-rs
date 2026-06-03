@@ -12,13 +12,13 @@
 //! - `GET /trades` injects the L2 signer address as `maker_address` and forwards `from_id`.
 //! - `cancel_market_orders` validates that at least one of market / asset_id is set.
 
-use pm_rs_clob_client::auth::{compute_l2_hmac, header};
-use pm_rs_clob_client::{
+use predict_rs_clob_client::auth::{compute_l2_hmac, header};
+use predict_rs_clob_client::{
     CancelMarketOrderRequest, Client, Credentials, Endpoints, OrdersRequest, PMCup26Signer,
     SignedOrder, TradesRequest,
 };
-use pm_rs_clob_client::clob::types::OrderType;
-use pm_rs_clob_client::types::Side;
+use predict_rs_clob_client::clob::types::OrderType;
+use predict_rs_clob_client::types::Side;
 use serde_json::{Value, json};
 use uuid::Uuid;
 use wiremock::matchers::{method, path};

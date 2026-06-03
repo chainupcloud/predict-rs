@@ -7,12 +7,12 @@ use std::time::Duration;
 
 use anyhow::{Context as _, anyhow};
 use futures::StreamExt as _;
-use pm_rs_clob_client::clob::ws::types::request::MarketLevel;
-use pm_rs_clob_client::{
+use predict_rs_clob_client::clob::ws::types::request::MarketLevel;
+use predict_rs_clob_client::{
     Client, ClientBuilder, ClobWebSocketClient, Credentials, MarketSubscribeOpts,
     PMCup26Signer,
 };
-use pm_rs_clob_client::clob::ws::types::response::{MarketEvent, UserEvent};
+use predict_rs_clob_client::clob::ws::types::response::{MarketEvent, UserEvent};
 
 use crate::cli::{Cli, WsArgs, WsBookArgs, WsBookWatchArgs, WsCmd, WsUserArgs};
 use crate::output::{self, Format};
@@ -125,7 +125,7 @@ fn build_unauth_client(args: &Cli) -> anyhow::Result<Client> {
 }
 
 async fn build_l2_client(args: &Cli) -> anyhow::Result<Client> {
-    use pm_rs_clob_client::types::ScopeId;
+    use predict_rs_clob_client::types::ScopeId;
     let pk = args.private_key.as_deref().ok_or_else(|| {
         anyhow!("private key required for /ws/user: pass --private-key or set PM_PRIVATE_KEY")
     })?;

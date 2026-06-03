@@ -1,4 +1,4 @@
-# pm-rs-clob-client
+# predict-rs-clob-client
 
 Rust SDK for [`pm-cup2026`](https://github.com/chainupcloud/pm-cup2026) prediction-market platform — a Polymarket V1-compatible CLOB extended with multi-tenant `scopeId` isolation.
 
@@ -6,7 +6,7 @@ Counterpart of the official Go SDK [`pm-sdk-go`](https://github.com/chainupcloud
 
 ```toml
 [dependencies]
-pm-rs-clob-client = { git = "https://github.com/chainupcloud/pm-rs", package = "pm-rs-clob-client" }
+predict-rs-clob-client = { git = "https://github.com/chainupcloud/predict-rs", package = "predict-rs-clob-client" }
 ```
 
 ## What you get
@@ -35,7 +35,7 @@ pm-rs-clob-client = { git = "https://github.com/chainupcloud/pm-rs", package = "
 ### Unauthenticated client (read-only)
 
 ```rust
-use pm_rs_clob_client::{Client, Endpoints};
+use predict_rs_clob_client::{Client, Endpoints};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -60,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
 ### Authenticated client (Safe wallet — default)
 
 ```rust
-use pm_rs_clob_client::{
+use predict_rs_clob_client::{
     Client, Credentials, PMCup26Signer, ScopeId, SignatureType,
 };
 use uuid::Uuid;
@@ -102,9 +102,9 @@ let client = Client::builder()
 ### Place a limit order (Safe wallet)
 
 ```rust
-use pm_rs_clob_client::clob::order_builder::OrderBuilder;
-use pm_rs_clob_client::clob::types::OrderType;
-use pm_rs_clob_client::Side;
+use predict_rs_clob_client::clob::order_builder::OrderBuilder;
+use predict_rs_clob_client::clob::types::OrderType;
+use predict_rs_clob_client::Side;
 use rust_decimal_macros::dec;
 use alloy::primitives::{Address, U256};
 
@@ -149,9 +149,9 @@ The server runs the actual book walk, but the signed envelope still carries `mak
 For any on-chain write — token approvals, CTF split / merge / redeem — only `signatureType=2` is accepted. Instead of broadcasting from the EOA, sign a `Safe.execTransaction` payload and submit it to the `relayer-service`; the relayer broadcasts from its own gas-key pool, so the user spends zero collateral.
 
 ```rust
-use pm_rs_clob_client::{Client, PMCup26Signer};
-use pm_rs_clob_client::safe::SafeTransaction;
-use pm_rs_clob_client::relayer::{SafeTxParams, SubmitRequest, SubmitType};
+use predict_rs_clob_client::{Client, PMCup26Signer};
+use predict_rs_clob_client::safe::SafeTransaction;
+use predict_rs_clob_client::relayer::{SafeTxParams, SubmitRequest, SubmitType};
 
 let client = Client::builder()
     .tenant("hermestrade.xyz")?
@@ -197,7 +197,7 @@ println!("hash={} state={:?}", final_tx.transaction_hash, final_tx.state);
 For batching multiple ops (e.g. fresh-wallet onboarding — USDW.approve to N spenders + CTF.setApprovalForAll to N operators), use [`safe::multisend::encode`] to pack `SafeSubOp::call(target, data)` into a single `DelegateCall` to the MultiSend contract:
 
 ```rust
-use pm_rs_clob_client::safe::multisend::{self, SafeSubOp};
+use predict_rs_clob_client::safe::multisend::{self, SafeSubOp};
 
 let ops = vec![
     SafeSubOp::call(usdw, encode_approve(ctf_exchange, U256::MAX)),
@@ -209,13 +209,13 @@ let packed = multisend::encode(&ops)?;
 let safe_tx = SafeTransaction::delegate_call(multisend_address, packed, safe_nonce);
 ```
 
-The CLI's `pm approve set --asset all` and `pm ctf {redeem,split,merge}` commands are full reference implementations of this pattern — see `cli/src/safe_exec.rs` for the shared plumbing.
+The CLI's `predict-cli approve set --asset all` and `predict-cli ctf {redeem,split,merge}` commands are full reference implementations of this pattern — see `cli/src/safe_exec.rs` for the shared plumbing.
 
 ### WebSocket — market channel
 
 ```rust
 use futures::StreamExt;
-use pm_rs_clob_client::{MarketSubscribeOpts, clob::ws::types::request::MarketLevel};
+use predict_rs_clob_client::{MarketSubscribeOpts, clob::ws::types::request::MarketLevel};
 
 let ws = client.clob_ws()?; // requires `Endpoints::ws_endpoint`
 let mut stream = ws
@@ -342,7 +342,7 @@ cargo test --workspace
 cargo test --workspace -- --ignored
 
 # Golden-signer regression (must always pass)
-cargo test -p pm-rs-clob-client --test golden_signer
+cargo test -p predict-rs-clob-client --test golden_signer
 
 # Live WS smoke (requires a running clob-ws endpoint)
 cargo test --workspace --test ws_market_smoke -- --ignored

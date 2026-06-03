@@ -17,7 +17,7 @@
 use std::time::Duration;
 
 use futures::StreamExt as _;
-use pm_rs_clob_client::{Client, MarketSubscribeOpts};
+use predict_rs_clob_client::{Client, MarketSubscribeOpts};
 
 #[tokio::test]
 #[ignore = "live network — run with `cargo test --workspace -- --ignored ws_market_smoke`"]

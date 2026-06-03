@@ -1,4 +1,4 @@
-//! `pm shell` — interactive REPL.
+//! `predict-cli shell` — interactive REPL.
 //!
 //! Each line is parsed as a fresh `Cli` invocation via `clap::Parser::try_parse_from`.
 //! Global state (wallet, tenant, credentials) is read from env vars / config file on every
@@ -15,7 +15,7 @@ use crate::output::Format;
 
 pub async fn run() -> anyhow::Result<()> {
     println!();
-    println!("  pm · Interactive Shell");
+    println!("  predict-cli · Interactive Shell");
     println!("  Type 'help' for commands, 'exit' or Ctrl-D to quit.");
     println!();
 
@@ -26,7 +26,7 @@ pub async fn run() -> anyhow::Result<()> {
     }
 
     loop {
-        match rl.readline("pm> ") {
+        match rl.readline("predict-cli> ") {
             Ok(line) => {
                 let line = line.trim();
                 if line.is_empty() {
@@ -42,7 +42,7 @@ pub async fn run() -> anyhow::Result<()> {
                 let _ = rl.add_history_entry(line);
 
                 let args = split_args(line);
-                let mut full_args = vec!["pm".to_string()];
+                let mut full_args = vec!["predict-cli".to_string()];
                 full_args.extend(args);
 
                 if let Some(cmd) = full_args.get(1)
@@ -94,7 +94,7 @@ pub async fn run() -> anyhow::Result<()> {
 }
 
 fn print_help() {
-    println!("pm shell — type any `pm` sub-command without the `pm ` prefix:");
+    println!("predict-cli shell — type any `predict-cli` sub-command without the `predict-cli ` prefix:");
     println!("  ok                                 server health");
     println!("  time                               server time");
     println!("  book <TOKEN>                       order book snapshot");
@@ -105,7 +105,7 @@ fn print_help() {
     println!("  wallet show                        wallet identity");
     println!();
     println!("Built-ins: `help`, `exit` / `quit`, Ctrl-D. `shell` itself is blocked.");
-    println!("Env vars / `pm wallet`-stored config apply on every line; flags supplied here override.");
+    println!("Env vars / `predict-cli wallet`-stored config apply on every line; flags supplied here override.");
 }
 
 fn history_path() -> Option<std::path::PathBuf> {

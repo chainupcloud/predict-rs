@@ -10,9 +10,9 @@
 //! Multi-endpoint configuration mirrors `pm-sdk-go`'s `WithEndpoints(clob, gamma, ws)`:
 //!
 //! ```no_run
-//! use pm_rs_clob_client::{Client, Endpoints};
+//! use predict_rs_clob_client::{Client, Endpoints};
 //!
-//! # async fn run() -> pm_rs_clob_client::Result<()> {
+//! # async fn run() -> predict_rs_clob_client::Result<()> {
 //! // Explicit three-URL form (matches pm-sdk-go.WithEndpoints):
 //! let client = Client::builder()
 //!     .endpoints(Endpoints::new(
@@ -65,7 +65,7 @@ use crate::signer::PMCup26Signer;
 use crate::types::Side;
 use std::collections::HashMap;
 
-const DEFAULT_USER_AGENT: &str = concat!("pm-rs-clob-client/", env!("CARGO_PKG_VERSION"));
+const DEFAULT_USER_AGENT: &str = concat!("predict-rs-clob-client/", env!("CARGO_PKG_VERSION"));
 
 /// Top-level CLOB client.
 #[derive(Clone, Debug)]

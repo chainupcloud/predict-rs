@@ -4,9 +4,9 @@
 //! inferred from the HTTP `Host` header. Construct via [`crate::Client::data`]:
 //!
 //! ```no_run
-//! use pm_rs_clob_client::Client;
+//! use predict_rs_clob_client::Client;
 //!
-//! # async fn run() -> pm_rs_clob_client::Result<()> {
+//! # async fn run() -> predict_rs_clob_client::Result<()> {
 //! let client = Client::builder().tenant("hermestrade.xyz")?.build()?;
 //! let data = client.data()?;
 //! let positions = data.positions("0x7e63be993c5f51547609dedfa8f2398ebf7ac2fe", 25, None).await?;

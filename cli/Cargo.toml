@@ -1,5 +1,5 @@
 [package]
-name = "pm-cli"
+name = "predict-cli"
 version = "0.1.0"
 description = "Terminal client for pm-cup2026 (prediction market)"
 edition.workspace = true
@@ -9,11 +9,11 @@ authors.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "pm"
+name = "predict-cli"
 path = "src/main.rs"
 
 [dependencies]
-pm-rs-clob-client = { path = "../clob-client" }
+predict-rs-clob-client = { path = "../clob-client" }
 alloy = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
