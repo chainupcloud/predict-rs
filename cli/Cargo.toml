@@ -1,7 +1,7 @@
 [package]
 name = "predict-cli"
 version = "0.1.0"
-description = "Terminal client for pm-cup2026 (prediction market)"
+description = "Prediction market terminal client"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

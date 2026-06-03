@@ -6,7 +6,7 @@ Gamma is a separate REST service from CLOB; it lives at
 market metadata: events, markets, tags, series, comments, profiles, search,
 plus per-tenant curation and public-info catalogs. The SDK port mirrors
 `pm-sdk-go/pkg/gamma` field-for-field against
-`pm-cup2026/services/gamma-service/internal/models/models.go`.
+the platform repo's `services/gamma-service/internal/models/models.go`.
 
 Construct a sub-client from any [`Client`](../clob-client/src/client.rs) that
 has a Gamma endpoint configured:
@@ -74,17 +74,17 @@ If the client was constructed with only `--clob-endpoint` and no Gamma URL,
 | POST | `/disputes/evidence` | — | — | write endpoint, not implemented |
 | GET  | `/docs`, `/openapi.json` | — | — | server-side Scalar / spec, not relevant to SDK |
 
-## Differences vs Polymarket Gamma
+## Differences vs upstream V1 Gamma
 
-| Dimension | Polymarket Gamma | predict-rs Gamma |
+| Dimension | Upstream V1 Gamma | predict-rs Gamma |
 |-----------|-----------------|-------------|
-| Service URL | `https://gamma-api.polymarket.com` | `https://gamma-api.<tenant>` (multi-tenant) |
+| Service URL | upstream hosted Gamma endpoint | `https://gamma-api.<tenant>` (multi-tenant) |
 | Tenant isolation | none | hostname `Host` header → tenant ID + per-tenant rows |
 | Wire stream | gamma SSE / streaming variant exists | REST only (no streaming in `gamma-service`) |
 | `Event.titleTranslation` / `Market.questionTranslation` / `Market.outcomeTranslation` | absent | i18n payload (multi-language JSON string) |
 | `Market.adjudication` | absent | UMA oracle lifecycle state + `nextSteps`, `questionId`, `adapterAddress` for the user-dapp dispute flow |
 | `Market.sportPlayType` / `Market.adapterInstance` | absent | tenant-routing fields for the relayer |
-| `/markets/information` body | exhaustive Polymarket filter | accepts a free-form JSON shape (`gamma-service` `MarketsInformationBody`); fields like `negRiskOther`, `rfqEnabled`, etc. do not exist here |
+| `/markets/information` body | exhaustive upstream V1 filter | accepts a free-form JSON shape (`gamma-service` `MarketsInformationBody`); fields like `negRiskOther`, `rfqEnabled`, etc. do not exist here |
 | `/curation/events` | absent | per-tenant featured / hero / highlight catalog |
 | `/public-info` | absent | tenant brand + chain config + contract addresses |
 | `/agreements` | absent | tenant agreements polling endpoint |

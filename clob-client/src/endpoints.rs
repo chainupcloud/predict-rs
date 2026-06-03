@@ -1,6 +1,6 @@
 //! Multi-endpoint configuration. Mirrors `pm-sdk-go`'s `WithEndpoints(clob, gamma, ws)` API.
 //!
-//! A `pm-cup2026` tenant exposes up to four service hosts, conventionally as subdomains
+//! A platform tenant exposes up to four service hosts, conventionally as subdomains
 //! under the tenant root:
 //!
 //! - **CLOB REST** (`clob-api.<tenant>`) — order book, prices, orders, auth.
@@ -17,7 +17,7 @@ use url::Url;
 
 use crate::error::{Error, Result};
 
-/// Service-host configuration for a `pm-cup2026` tenant.
+/// Service-host configuration for a platform tenant.
 #[derive(Clone, Debug)]
 pub struct Endpoints {
     pub clob: Url,

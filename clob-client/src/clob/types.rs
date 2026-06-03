@@ -1,4 +1,4 @@
-//! Wire types for the CLOB REST API. Matches `pm-cup2026/services/clob-service/docs/openapi.yaml`.
+//! Wire types for the CLOB REST API. Matches the platform repo's `services/clob-service/docs/openapi.yaml`.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -48,7 +48,7 @@ pub struct TickSizeResponse {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct FeeRateResponse {
-    /// Fee rate in basis points. Server returns this field as `base_fee`; Polymarket V1 uses
+    /// Fee rate in basis points. Server returns this field as `base_fee`; upstream V1 uses
     /// `fee_rate_bps` / `feeRateBps`.
     #[serde(alias = "feeRateBps", alias = "fee_rate_bps", alias = "base_fee")]
     pub fee_rate_bps: u64,
@@ -240,7 +240,7 @@ pub struct ApiKeyInfo {
     #[serde(default)]
     pub address: Option<String>,
     /// Safe wallet address (CREATE2-derived from `signer + scopeId`). Present when at least
-    /// one key has it stored. Extension field; absent on Polymarket V1.
+    /// one key has it stored. Extension field; absent on upstream V1.
     #[serde(default, alias = "proxyWallet", alias = "proxy_wallet")]
     pub proxy_wallet: Option<String>,
 }

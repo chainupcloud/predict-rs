@@ -14,7 +14,7 @@
 //! Wire format verified against the on-chain tx
 //! `0xca441323afc7a9a47296dc5389f9a2f1385caa8de914a33b068904f542f1fa35` on Monad
 //! (Safe `0x7e63be99...c2fe`, 7 approval ops bundled). The frontend reference
-//! implementation lives at `pm-cup2026/apps/user-dapp/src/hooks/useSetupSteps.ts:516`.
+//! implementation lives at the platform repo's `apps/user-dapp/src/hooks/useSetupSteps.ts:516`.
 
 use alloy::primitives::{Address, U256};
 

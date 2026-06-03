@@ -178,7 +178,7 @@ impl ClobWebSocketClient {
 
 // ─── typed-filter helpers ──────────────────────────────────────────────────
 //
-// Pattern lifted from polymarket's `rs-clob-client::clob::ws::client` — each
+// Pattern lifted from the upstream `rs-clob-client::clob::ws::client` — each
 // method spins up the underlying channel stream and `filter_map`s to keep only
 // the variant the caller cares about. Errors propagate untouched. Use these
 // when you want a typed stream; use `subscribe_market` / `subscribe_user`
@@ -212,7 +212,7 @@ macro_rules! user_filter {
 
 /// `(bid + ask) / 2` snapshot computed from a [`BookEvent`].
 ///
-/// Mirrors polymarket's `MidpointUpdate`. Emitted only when both sides have at
+/// Mirrors the upstream `MidpointUpdate`. Emitted only when both sides have at
 /// least one level — frames where one side is empty are dropped.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MidpointUpdate {
@@ -302,7 +302,7 @@ impl ClobWebSocketClient {
     }
 
     /// Subscribe and emit `(best_bid + best_ask) / 2` midpoint updates computed from `book`
-    /// frames. Frames with one side empty are dropped. Mirrors polymarket's
+    /// frames. Frames with one side empty are dropped. Mirrors the upstream
     /// `subscribe_midpoints`.
     pub async fn subscribe_midpoints(
         &self,

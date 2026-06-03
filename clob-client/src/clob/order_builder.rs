@@ -47,7 +47,7 @@ use crate::types::{Address, ScopeId, Side, SignatureType, U256};
 /// "Token 与 USDC 精度" and `pm-sdk-go::usdcDecimals`.
 pub const USDC_DECIMALS: u32 = 6;
 
-/// Maximum decimal places for `size` (lot size). Matches Polymarket reference.
+/// Maximum decimal places for `size` (lot size). Matches the upstream V1 reference.
 pub const LOT_SIZE_SCALE: u32 = 2;
 
 /// Marker for the limit-order builder variant.
@@ -579,7 +579,7 @@ pub fn normalize_ecdsa_v(mut sig: [u8; 65]) -> [u8; 65] {
 }
 
 /// Default salt: current Unix-nanosecond timestamp masked to 53 bits. Matches
-/// `pm-sdk-go::time.Now().UnixNano()` and the Polymarket `generate_seed` convention (server
+/// `pm-sdk-go::time.Now().UnixNano()` and the upstream V1 `generate_seed` convention (server
 /// treats `salt` as IEEE-754 integer-safe).
 #[must_use]
 fn generate_salt() -> U256 {

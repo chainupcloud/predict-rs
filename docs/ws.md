@@ -9,7 +9,7 @@ REST API on `:8080`, but at distinct paths:
 | `/ws/market` | none | `asset_ids` (token IDs) |
 | `/ws/user`   | L2 (API key + passphrase, in the first WS frame) | `markets` (condition IDs) |
 
-The authoritative wire spec is `pm-cup2026/services/clob-service/docs/asyncapi-{market,user}.json`.
+The authoritative wire spec is the platform repo's `services/clob-service/docs/asyncapi-{market,user}.json`.
 Go-side counterpart: `pm-sdk-go/pkg/ws/`.
 
 ## Quick start (SDK)

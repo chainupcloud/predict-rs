@@ -111,7 +111,7 @@ impl ContractsSection {
     }
 
 /// The set of (name, address) pairs that a user wallet must authorise as USDC spenders
-    /// and CTF operators in order to trade on this tenant. Mirrors polymarket-cli's
+    /// and CTF operators in order to trade on this tenant. Mirrors the upstream CLI's
     /// `approval_targets()` but reads addresses from the tenant YAML rather than a hard-coded
     /// `phf_map!`.
     pub fn approval_targets(&self) -> Vec<ApprovalTarget> {

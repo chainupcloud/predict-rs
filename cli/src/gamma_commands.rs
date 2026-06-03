@@ -1,6 +1,6 @@
 //! CLI subcommands for the Gamma API.
 //!
-//! Mirrors `polymarket-cli`'s `events / markets / tags / series / comments /
+//! Mirrors the upstream CLI's `events / markets / tags / series / comments /
 //! profiles / sports / search` tree, dropping subcommands whose endpoint does
 //! not exist in the gamma openapi (no `teams`, no `markets list`,
 //! no streaming) and adding platform-only ones (`curation events`,

@@ -1,6 +1,6 @@
 //! CLI subcommands for the `data-service`.
 //!
-//! Mirrors `polymarket-cli`'s `data {positions / closed-positions / trades / activity /
+//! Mirrors the upstream CLI's `data {positions / closed-positions / trades / activity /
 //! holders / open-interest / live-volume / leaderboard / ...}` tree, dropping commands
 //! whose endpoint doesn't exist here (`builder-leaderboard`, `builder-volume`,
 //! `value`) and adding platform-only ones (`unwrap-requests`).

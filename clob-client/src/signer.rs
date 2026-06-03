@@ -1,4 +1,4 @@
-//! pm-cup2026 EIP-712 signer.
+//! Prediction market EIP-712 signer.
 //!
 //! Produces byte-identical signatures with `pm-sdk-go/pkg/signer` for:
 //!
@@ -25,7 +25,7 @@ use crate::types::ScopeId;
 pub const CLOB_AUTH_DOMAIN_NAME: &str = "ClobAuthDomain";
 
 /// EIP-712 domain name for the CTFExchange order. Note: domain name is
-/// `"Prediction Market Protocol"` (NOT `"CTFExchange"` or `"Polymarket CTF Exchange"` — this
+/// `"Prediction Market Protocol"` (NOT the upstream V1 domain names — this
 /// name is fixed on-chain and the SDK must match exactly or signature verification fails).
 pub const ORDER_DOMAIN_NAME: &str = "Prediction Market Protocol";
 

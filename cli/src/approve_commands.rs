@@ -75,7 +75,7 @@ pub enum AssetSet {
     /// Only `CTF.setApprovalForAll(operator, true)` ops.
     Ctf,
     /// Both USDW.approve and CTF.setApprovalForAll for every target — what a fresh
-    /// wallet needs to fully trade. Matches polymarket-V1's `set` defaults.
+    /// wallet needs to fully trade. Matches the upstream V1 `set` defaults.
     All,
 }
 

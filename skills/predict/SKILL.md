@@ -1,21 +1,21 @@
 ---
 name: predict
 description: >-
-  Trade prediction markets on pm-cup2026 tenants (e.g. hermestrade.xyz) with the
+  Trade prediction markets (e.g. the hermestrade.xyz tenant) with the
   predict-cli binary: install the CLI, set up a wallet and L2 API key, discover
   markets, read orderbooks, place and cancel limit/market orders, track positions
   and PnL, split/merge/redeem conditional tokens, and stream live WebSocket
   updates. Use this skill whenever the user mentions predict-cli, predict-rs,
-  pm-cup2026, hermestrade, prediction markets, outcome shares, YES/NO tokens,
+  hermestrade, prediction markets, outcome shares, YES/NO tokens,
   CLOB orders, or conditional tokens (CTF) — even if they don't name the tool
   explicitly, and even for read-only questions like "what's the midpoint" or
   "show my positions".
 ---
 
-# Trading pm-cup2026 prediction markets with predict-cli
+# Trading prediction markets with predict-cli
 
-`predict-cli` is the terminal client for the pm-cup2026 CLOB (a Polymarket
-V1-compatible prediction-market exchange with multi-tenant `scopeId` extensions).
+`predict-cli` is the terminal client for a multi-tenant prediction-market
+CLOB exchange.
 Every command supports `-o json` for machine-readable output — prefer it when you
 need to parse results (pipe to `jq`).
 

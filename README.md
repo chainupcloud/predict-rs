@@ -1,13 +1,13 @@
 # predict-rs
 
-Rust toolchain for [`pm-cup2026`](https://github.com/chainupcloud/pm-cup2026) prediction-market platform — a Polymarket V1-compatible CLOB with a multi-tenant `scopeId` extension.
+Rust toolchain for the prediction market platform — a CLOB with a multi-tenant `scopeId` extension.
 
 Cargo workspace, two member crates:
 
 | Crate | Path | Purpose |
 |-------|------|---------|
-| `predict-rs-clob-client` | [`clob-client/`](clob-client/) | Rust SDK for `pm-cup2026` CLOB / Gamma / WebSocket APIs. Counterpart of [`pm-sdk-go`](https://github.com/chainupcloud/pm-sdk-go); ported from Polymarket's [`rs-clob-client`](https://github.com/Polymarket/rs-clob-client) (V1) with specific extensions: `scopeId`-extended EIP-712 `ClobAuth` / `Order` domains, `PRED_*` auth headers (vs `POLY_*`), standard-base64 HMAC encoding (vs URL-safe). |
-| `predict-cli` | [`cli/`](cli/) | `predict-cli` binary — terminal client for `pm-cup2026`. Browse markets, place orders, manage positions. Counterpart of Polymarket's [`polymarket-cli`](https://github.com/Polymarket/polymarket-cli). |
+| `predict-rs-clob-client` | [`clob-client/`](clob-client/) | Rust SDK for the platform's CLOB / Gamma / WebSocket APIs. Counterpart of `pm-sdk-go`; ported from the upstream V1 `rs-clob-client` with specific extensions: `scopeId`-extended EIP-712 `ClobAuth` / `Order` domains, `PRED_*` auth headers (vs `POLY_*`), standard-base64 HMAC encoding (vs URL-safe). |
+| `predict-cli` | [`cli/`](cli/) | `predict-cli` binary — terminal client for the platform. Browse markets, place orders, manage positions. |
 
 ## Status
 
@@ -83,14 +83,14 @@ Reference network configs (NOT hard-coded in the SDK — caller supplies them at
 
 ## Why a platform-specific fork?
 
-`pm-cup2026` extends Polymarket V1 with multi-tenant `scopeId` isolation:
+The platform extends the upstream V1 protocol with multi-tenant `scopeId` isolation:
 
 - **`ClobAuth` EIP-712 struct** (5 fields): `address / timestamp / nonce / bytes32 scopeId / message`
 - **`Order` EIP-712 struct** (13 fields): adds `bytes32 scopeId` at the end
 - **Auth headers**: `PRED_*` instead of `POLY_*` (e.g. `PRED_API_KEY`, `PRED_SIGNATURE`)
-- **HMAC secret**: standard base64 (Polymarket uses URL-safe)
+- **HMAC secret**: standard base64 (upstream V1 uses URL-safe)
 
-Upstream Polymarket clients (`rs-clob-client*`) cannot talk to `pm-cup2026` without these changes. Full comparison: [`docs/diff-vs-polymarket-v1.md`](docs/diff-vs-polymarket-v1.md).
+Stock upstream V1 clients cannot talk to the platform without these changes. Full comparison: [`docs/diff-vs-upstream-v1.md`](docs/diff-vs-upstream-v1.md).
 
 ## Layout
 
@@ -100,7 +100,7 @@ predict-rs/
 ├── LICENSE
 ├── README.md               # this file
 ├── CLAUDE.md
-├── docs/                   # auth-flow / orders / ws / gamma / wallet / diff-vs-polymarket-v1
+├── docs/                   # auth-flow / orders / ws / gamma / wallet / diff-vs-upstream-v1
 ├── examples/networks/      # reference network YAMLs (Monad / OP Sepolia / …)
 ├── clob-client/            # SDK crate (predict-rs-clob-client) — see clob-client/README.md
 └── cli/                    # CLI crate (binary: predict-cli) — see cli/README.md

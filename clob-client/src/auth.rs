@@ -1,6 +1,6 @@
 //! L1 / L2 authentication primitives and header constants.
 //!
-//! This SDK uses `PRED_*` header names (vs Polymarket's `POLY_*`) and standard base64 for the
+//! This SDK uses `PRED_*` header names (vs the upstream `POLY_*`) and standard base64 for the
 //! HMAC secret (vs URL-safe).
 //!
 //! Two flavours are supported:
@@ -252,7 +252,7 @@ mod tests {
     }
 
     /// Cross-check against `references/rs-clob-client/src/auth.rs::hmac_succeeds`.
-    /// The Polymarket reference vector uses URL-safe base64; this SDK uses standard base64
+    /// The upstream V1 reference vector uses URL-safe base64; this SDK uses standard base64
     /// so the output differs after the first `_/-` substitution. We compute both encodings
     /// for the same secret bytes and confirm the bytes are identical.
     #[test]

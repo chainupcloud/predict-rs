@@ -1,8 +1,8 @@
 //! `predict-cli setup` — guided first-time configuration wizard.
 //!
-//! Mirrors `polymarket setup`'s shape (banner → numbered steps with stdin prompts → "next
+//! Mirrors the upstream CLI `setup`'s shape (banner → numbered steps with stdin prompts → "next
 //! steps" footer) but adapted for multi-tenant, scopeId-extended, Safe-backed
-//! topology. Polymarket has 4 steps (wallet / proxy / fund / approve); pm-cup2026 has 4
+//! topology. Upstream V1 has 4 steps (wallet / proxy / fund / approve); this platform has 4
 //! steps too but they're different: wallet → tenant identity → Safe address → L2 API key.
 //! Each step delegates the actual work to the existing subcommand or SDK call rather than
 //! duplicating logic — the wizard is just a friendly entry point.
@@ -157,7 +157,7 @@ fn print_banner() {
     let dim = "\x1b[2m";
     let r = "\x1b[0m";
     println!();
-    println!("  {bold}pm · pm-cup2026 setup wizard{r}");
+    println!("  {bold}predict-cli · setup wizard{r}");
     println!(
         "  {dim}Walks you through wallet, tenant, Safe address, and L2 API key.{r}"
     );

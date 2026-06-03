@@ -33,7 +33,7 @@ pub enum OrderCommand {
     /// Default `--order-type` is `fak`.
     Market(MarketArgs),
     /// Build N signed orders sharing the same side / fee / signer, then `POST /orders`. Up to 15
-    /// per batch. Mirrors `polymarket clob post-orders`.
+    /// per batch. Mirrors the upstream CLI's `clob post-orders`.
     PostBatch(PostBatchArgs),
     /// `DELETE /order` by id.
     Cancel(CancelArgs),
@@ -53,7 +53,7 @@ pub enum OrderCommand {
     Scoring(ScoringArgs),
 }
 
-/// `predict-cli order create` arguments — mirrors `Polymarket clob create-order` shape with
+/// `predict-cli order create` arguments — mirrors the upstream `clob create-order` shape with
 /// renames. `--limit` / `--market` selects the builder variant (limit by default).
 #[derive(Debug, Args)]
 pub struct CreateArgs {

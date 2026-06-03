@@ -29,7 +29,7 @@ use crate::error::{Error, Result};
 
 /// Generic envelope used for several list endpoints (`positions`, `activity`,
 /// `closed-positions`, `v1/market-positions`). The envelope is a divergence from
-/// polymarket's data-api which returns flat arrays — so the SDK transparently unwraps it.
+/// the upstream data-api which returns flat arrays — so the SDK transparently unwraps it.
 #[derive(serde::Deserialize)]
 struct DataEnvelope<T> {
     #[serde(default = "Vec::new")]
@@ -125,7 +125,7 @@ impl DataClient {
     // ─── /activity ─────────────────────────────────────────────────────────
 
     /// `GET /activity` — on-chain activity (trades + splits + merges + redeems + rewards) for a wallet.
-    /// Wrapped in `{data: [...]}` (divergence from polymarket flat array).
+    /// Wrapped in `{data: [...]}` (divergence from the upstream flat array).
     pub async fn activity(
         &self,
         address: &str,
@@ -201,7 +201,7 @@ impl DataClient {
 
     /// `GET /user-pnl` — cumulative profit/loss time-series for a wallet.
     /// `interval` accepts `1d / 1w / 1m / all`. `fidelity` accepts `1h / 3h / 12h / 18h / 1d`.
-    /// Live wire uses `user_address` as the address param (divergence from polymarket's `user`).
+    /// Live wire uses `user_address` as the address param (divergence from the upstream `user` param).
     pub async fn user_pnl(
         &self,
         address: &str,
@@ -256,7 +256,7 @@ impl DataClient {
     // ─── /unwrap-requests ──────────────────────────────────────────────────
 
     /// `GET /unwrap-requests` — USDW unwrap queue for a Safe address.
-    /// No Polymarket V1 equivalent.
+    /// No upstream V1 equivalent.
     pub async fn unwrap_requests(
         &self,
         safe: &str,
