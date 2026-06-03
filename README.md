@@ -24,6 +24,16 @@ Shipped surface:
 - **CTF** — `condition-id` / `position-id` / `collection-id` helpers; `split` / `merge` / `redeem` via Safe meta-tx through the relayer.
 - **Approvals** — `IERC20.allowance` + `IERC1155.isApprovedForAll` reads; `set` via Safe MultiSend through the relayer.
 
+## Install
+
+One-line install (macOS / Linux, x86_64 / arm64) — downloads the latest release binary, verifies its sha256, installs to `/usr/local/bin`:
+
+```bash
+curl -sSfL https://raw.githubusercontent.com/chainupcloud/predict-rs/main/install.sh | sh
+```
+
+Requires at least one published [release](https://github.com/chainupcloud/predict-rs/releases) (`v*` tag → [`release.yml`](.github/workflows/release.yml) builds the four target tarballs + `checksums.txt`). To build from source instead, see Quick start below.
+
 ## Quick start
 
 ```bash
