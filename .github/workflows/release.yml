@@ -22,13 +22,14 @@ jobs:
             runner: macos-14
           - target: aarch64-apple-darwin
             runner: macos-latest
-          # Both Linux targets build via cross: its ubuntu-20.04-based images link
-          # against glibc 2.31, so binaries run on Ubuntu 20.04 / 22.04 / 24.04.
-          # A native ubuntu-latest build links glibc 2.38+ and dies with
-          # "version `GLIBC_2.38' not found" on older distros (hit live on 22.04).
+          # x86_64 Linux builds natively on ubuntu-22.04 (glibc 2.35 floor →
+          # runs on Ubuntu 22.04/24.04, Debian 12+). ubuntu-latest (24.04) links
+          # glibc 2.38+ and dies on 22.04 (hit live); cross's 20.04 image is out
+          # because aws-lc-sys hard-rejects its GCC 9 (memcmp bug 95189).
           - target: x86_64-unknown-linux-gnu
-            runner: ubuntu-latest
-            cross: true
+            runner: ubuntu-22.04
+          # aarch64 cross-compiles via cross (its aarch64 toolchain passes
+          # aws-lc-sys's compiler check; produces glibc-2.31-compatible binaries).
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
             cross: true
