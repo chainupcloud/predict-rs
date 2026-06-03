@@ -6,7 +6,7 @@
 //! [`crate::gamma::GammaClient`].
 //!
 //! See `predict-rs/docs/ws.md` for the wire-format overview, and the AsyncAPI
-//! specs at `pm-cup2026/services/clob-service/docs/asyncapi-{market,user}.json`
+//! specs at the platform repo's `services/clob-service/docs/asyncapi-{market,user}.json`
 //! for the authoritative payload definitions.
 
 pub mod client;

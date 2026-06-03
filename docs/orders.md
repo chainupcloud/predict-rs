@@ -61,7 +61,7 @@ band, the server enforces the same rule and rejects orders that don't comply.
 - **SELL** fee in USDC: `min(p, 1-p) × size × bps / 10000`
 
 This is the same formula on-chain as `CalculatorHelper.calculateExchangeFee`. See
-`pm-cup2026/services/clob-service/docs/fee-algorithm.md` for the full derivation.
+the platform repo's `services/clob-service/docs/fee-algorithm.md` for the full derivation.
 
 ## Signature normalisation
 
@@ -183,7 +183,7 @@ predict-cli ... heartbeat
 - `signature` is `0x` + 130 hex chars (`r||s||v` with `v ∈ {27, 28}`).
 - `next_cursor: "LTE="` means end-of-stream.
 
-## Differences vs Polymarket V1
+## Differences vs upstream V1
 
 - Salt = `time.Now().UnixNano()` masked to 53 bits (matches pm-sdk-go); rs-clob-client
   uses a randomised mask of `seconds × rand_f64`.

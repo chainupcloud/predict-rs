@@ -5,7 +5,7 @@
 //! `gamma-api.<tenant>` (e.g. `https://gamma-api.hermestrade.xyz`). Construct
 //! a [`GammaClient`] from a parent [`crate::Client`] via [`crate::Client::gamma`].
 //!
-//! The full endpoint table and Polymarket-comparison live in
+//! The full endpoint table and upstream-comparison live in
 //! [`predict-rs/docs/gamma.md`](../../docs/gamma.md).
 
 pub mod client;

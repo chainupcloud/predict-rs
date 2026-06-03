@@ -5,7 +5,7 @@
 //! command, the same as a normal CLI invocation — there is no "shell session" stickiness
 //! beyond what env vars provide.
 //!
-//! Pattern lifted from polymarket-cli's `shell.rs`; the structure (banner, rustyline loop,
+//! Pattern lifted from the upstream CLI's `shell.rs`; the structure (banner, rustyline loop,
 //! reject `shell`-in-`shell`, `Box::pin` to break async recursion) is intentional.
 
 use clap::Parser as _;
@@ -115,7 +115,7 @@ fn history_path() -> Option<std::path::PathBuf> {
 }
 
 /// Tokenize a shell-style line: split on whitespace, honor double quotes for spaces.
-/// Adapted from polymarket-cli/src/shell.rs::split_args.
+/// Adapted from the upstream CLI's shell.rs::split_args.
 fn split_args(input: &str) -> Vec<String> {
     let mut args = Vec::new();
     let mut current = String::new();

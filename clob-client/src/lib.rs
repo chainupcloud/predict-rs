@@ -1,13 +1,13 @@
-//! pm-cup2026 CLOB Rust client SDK.
+//! Prediction market CLOB Rust client SDK.
 //!
-//! Port of Polymarket's [`rs-clob-client`](https://github.com/Polymarket/rs-clob-client) V1 SDK,
-//! adapted for [`pm-cup2026`](https://github.com/chainupcloud/pm-cup2026) prediction-market
+//! Port of the upstream V1 `rs-clob-client` SDK,
+//! adapted for the prediction-market
 //! platform. Differences from upstream:
 //!
 //! - **EIP-712 ClobAuth** is extended with a `bytes32 scopeId` field for multi-tenant isolation.
 //! - **EIP-712 Order** struct is extended with a `bytes32 scopeId` field at the end (13 fields total).
 //! - **HTTP auth headers** are renamed from `POLY_*` to `PRED_*`.
-//! - **HMAC secret encoding** uses standard base64 (this SDK) vs URL-safe (Polymarket).
+//! - **HMAC secret encoding** uses standard base64 (this SDK) vs URL-safe (upstream V1).
 //!
 //! See `pm-sdk-go` for the Go-side counterpart targeting the same backend.
 
@@ -41,10 +41,10 @@ pub use gamma::GammaClient;
 pub use signer::PMCup26Signer;
 pub use types::{Side, SignatureType};
 
-/// Default `pm-cup2026` dev endpoint.
+/// Default platform dev endpoint.
 pub const DEFAULT_ENDPOINT: &str = "https://clob-api.hermestrade.xyz";
 
-/// OP Sepolia chain ID — the canonical pm-cup2026 staging chain.
+/// OP Sepolia chain ID — the canonical platform staging chain.
 pub const OP_SEPOLIA: u64 = 11_155_420;
 
 /// Polygon mainnet chain ID — used by golden test vectors.

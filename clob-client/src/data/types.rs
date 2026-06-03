@@ -1,5 +1,5 @@
 //! Response types for the `data-service`. Field shapes match the Go handler structs
-//! at `pm-cup2026/services/data-service/internal/handlers/` 1:1 — including specific
+//! at the platform repo's `services/data-service/internal/handlers/` 1:1 — including specific
 //! additions (`questionTranslation` / `eventTitleTranslation` i18n fields, `fee` on trades,
 //! the wrapped leaderboard envelope, `unwrap-requests`).
 
@@ -357,7 +357,7 @@ pub struct BiggestWinEntry {
     pub profit: f64,
 }
 
-/// Wrapped envelope returned by `GET /v1/leaderboard`. The deviation from polymarket
+/// Wrapped envelope returned by `GET /v1/leaderboard`. The deviation from upstream V1
 /// is intentional: bundling `biggest_wins` into the same response saves a second RTT for the
 /// trader-leaderboard UI which renders both columns at once.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -373,7 +373,7 @@ pub struct LeaderboardResponse {
 
 // ─── /unwrap-requests ──────────────────────────────────────────────────────
 
-/// USDW unwrap-request row. No Polymarket V1 equivalent.
+/// USDW unwrap-request row. No upstream V1 equivalent.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UnwrapRequest {

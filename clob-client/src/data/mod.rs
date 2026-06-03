@@ -4,9 +4,9 @@
 //! `data-api.<tenant>` (e.g. `https://data-api.hermestrade.xyz`). Construct a
 //! [`DataClient`] from a parent [`crate::Client`] via [`crate::Client::data`].
 //!
-//! Counterpart of polymarket's `data-api.polymarket.com`. Field-level divergences (i18n
+//! Counterpart of the upstream hosted data API. Field-level divergences (i18n
 //! fields, wrapped leaderboard envelope, extra `fee` field on `/trades`) are documented in
-//! `pm-cup2026/services/data-service/docs/polymarket-divergence-register.md` — they are
+//! the platform repo's data-service divergence register — they are
 //! intentional product decisions, not bugs.
 
 pub mod client;

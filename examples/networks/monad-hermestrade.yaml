@@ -1,4 +1,4 @@
-# Reference network configuration: pm-cup2026 Monad tenant `hermestrade.xyz`.
+# Reference network configuration: Monad tenant `hermestrade.xyz`.
 #
 # Per pm-rs/CLAUDE.md, contract addresses must NOT be hard-coded in the SDK.
 # This file is a CALLER-SUPPLIED reference: copy it, edit it, and pass values

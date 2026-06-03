@@ -76,10 +76,10 @@ impl Side {
     }
 }
 
-/// Polymarket-style signature type — same numeric values as pm-cup2026.
+/// Upstream V1-style signature type — same numeric values as the platform.
 ///
 /// - `Eoa` (0): direct EOA signature
-/// - `PolyProxy` (1): Polymarket proxy wallet (Magic / email login)
+/// - `PolyProxy` (1): upstream V1 proxy wallet (Magic / email login)
 /// - `PolyGnosisSafe` (2): browser wallet via Gnosis Safe (1-of-1) — default
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SignatureType {

@@ -1,6 +1,6 @@
 # predict-cli (`predict-cli`)
 
-Terminal client for [`pm-cup2026`](https://github.com/chainupcloud/pm-cup2026) prediction-market platform. Browse markets, place orders, manage positions — counterpart of Polymarket's [`polymarket-cli`](https://github.com/Polymarket/polymarket-cli), with feature parity for everything the backend exposes (see [Non-goals](#non-goals) for what it deliberately skips).
+Terminal client for the prediction market platform. Browse markets, place orders, manage positions — with feature parity for everything the backend exposes (see [Non-goals](#non-goals) for what it deliberately skips).
 
 ```bash
 $ predict-cli --tenant hermestrade.xyz time
@@ -95,8 +95,8 @@ Empty values are treated as unset.
 
 | Value | Type | Use when |
 |-------|------|----------|
-| `eoa` | 0 — direct EOA signing | Funds held in the same EOA that signs. Polymarket-style trading wallet. |
-| `proxy` | 1 — Polymarket proxy wallet | Legacy / interop. |
+| `eoa` | 0 — direct EOA signing | Funds held in the same EOA that signs. |
+| `proxy` | 1 — upstream V1 proxy wallet | Legacy / interop. |
 | `gnosis-safe` (**default**) | 2 — 1-of-1 Gnosis Safe | **Default.** EOA signs; the Safe is the `maker` and holds the funds. |
 
 The default is `gnosis-safe`. Persist a different choice with `predict-cli wallet create --signature-type eoa`, or override per-invocation via `--signature-type <eoa|proxy|gnosis-safe>` / `PM_SIGNATURE_TYPE`.
@@ -406,10 +406,10 @@ predict-cli order create ...
 Commands intentionally omitted because the backend doesn't expose the underlying endpoint, or because the equivalent is provided through a different surface:
 
 - **Market browsing** — `markets list / get / sampling-markets / simplified-markets`. Discovery is pushed through Gamma instead (`predict-cli gamma events …`).
-- **Polymarket rewards** — `rewards list / earnings / reward-percentages / current-rewards / orders-scoring`. Tenants run their own incentive logic.
+- **Upstream V1 rewards** — `rewards list / earnings / reward-percentages / current-rewards / orders-scoring`. Tenants run their own incentive logic.
 - **Notifications + account state** — `notifications / closed-only-mode / account-status / geoblock / neg-risk` (the neg-risk flag is embedded in the `/book` response).
-- **`bridge`, `rtds`, `rfq`** — Polymarket-proprietary endpoints not present on this platform.
-- **EOA-broadcast `ctf` writes** — Polymarket V1 broadcasts `splitPosition / mergePositions / redeemPositions` directly from the EOA. Only `signatureType=2` (Safe) is supported, so `predict-cli ctf {split,merge,redeem}` instead routes through the `relayer-service` (Safe meta-tx). Same functional outcome, different wire path.
+- **`bridge`, `rtds`, `rfq`** — upstream V1-proprietary endpoints not present on this platform.
+- **EOA-broadcast `ctf` writes** — upstream V1 broadcasts `splitPosition / mergePositions / redeemPositions` directly from the EOA. Only `signatureType=2` (Safe) is supported, so `predict-cli ctf {split,merge,redeem}` instead routes through the `relayer-service` (Safe meta-tx). Same functional outcome, different wire path.
 - **`upgrade`** — on the roadmap; not yet shipped.
 
 ## Output formats

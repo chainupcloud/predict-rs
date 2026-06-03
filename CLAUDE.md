@@ -13,16 +13,16 @@ Telegram chat replies to the user may remain Chinese; this rule applies to repos
 
 ## Project scope
 
-`predict-rs` is the Rust toolchain for [`pm-cup2026`](https://github.com/chainupcloud/pm-cup2026) prediction-market platform. Cargo workspace with two member crates:
+`predict-rs` is the Rust toolchain for the prediction market platform. Cargo workspace with two member crates:
 
-- `predict-rs-clob-client` (lib) — CLOB / Gamma / WebSocket SDK. Counterpart of [`pm-sdk-go`](https://github.com/chainupcloud/pm-sdk-go); ported from Polymarket's `rs-clob-client` V1 with platform-specific extensions.
-- `predict-cli` (bin: `predict-cli`) — terminal client. Counterpart of Polymarket's `polymarket-cli`.
+- `predict-rs-clob-client` (lib) — CLOB / Gamma / WebSocket SDK. Counterpart of `pm-sdk-go`; ported from the upstream V1 `rs-clob-client` with platform-specific extensions.
+- `predict-cli` (bin: `predict-cli`) — terminal client. Counterpart of the upstream V1 CLI.
 
 ## Hard constraints (drive API design)
 
 ### 1. Multi-tenant SaaS
 
-`pm-cup2026` is a **multi-tenant SaaS** platform:
+The prediction market platform is **multi-tenant SaaS**:
 
 - Each tenant has its own **dedicated domain** (e.g. `clob-api.tenant-a.example.com`), distinguished by the HTTP `Host` header.
 - Multiple tenants may **share a unified order book** (same backend, different `scopeId`).
@@ -37,7 +37,7 @@ Telegram chat replies to the user may remain Chinese; this rule applies to repos
 
 ### 2. Configurable multi-chain
 
-`pm-cup2026` is **chain-agnostic**; the target network is confirmed at deploy time. Currently in scope:
+The platform is **chain-agnostic**; the target network is confirmed at deploy time. Currently in scope:
 
 | Network | chainID | RPC | Gas Token | Status |
 |---------|---------|-----|-----------|--------|
@@ -49,7 +49,7 @@ Additional EVM networks will be added in the future.
 **Implications for the SDK:**
 
 - ❌ **Do not** hard-code `chain_id`, RPC URL, or contract addresses (exchange / collateral / CTF / fee module).
-- ❌ **Do not** put chain-related constants in a `phf_map!` inside `lib.rs` (the pattern used by Polymarket's `rs-clob-client/src/lib.rs` — **do not copy that approach**).
+- ❌ **Do not** put chain-related constants in a `phf_map!` inside `lib.rs` (the pattern used by the upstream V1 `rs-clob-client/src/lib.rs` — **do not copy that approach**).
 - ✅ `chain_id`, `exchange_address`, RPC URL, gas-token symbol all come from **runtime configuration**.
 - ✅ The CLI config file supports multiple `[networks.<name>]` sections with a `--network <name>` flag to switch.
 - ✅ Any method that interacts with chain-level constants takes them as explicit parameters; nothing is read from a global.
@@ -65,16 +65,16 @@ cargo test -p predict-rs-clob-client --test golden_signer
 
 Golden vectors live at `clob-client/tests/fixtures/golden.json` (a copy of `pm-sdk-go/pkg/signer/testdata/golden.json`). If the upstream Go fixture changes, sync the file here and re-run the test.
 
-### 4. Wire-format differences vs Polymarket
+### 4. Wire-format differences vs upstream V1
 
-- Authentication headers use the `PRED_*` prefix (Polymarket uses `POLY_*`).
-- HMAC secret uses **standard** base64 (Polymarket uses URL-safe).
+- Authentication headers use the `PRED_*` prefix (upstream V1 uses `POLY_*`).
+- HMAC secret uses **standard** base64 (upstream V1 uses URL-safe).
 - `ClobAuth` is a **5-field** struct with `bytes32 scopeId` inserted between `nonce` and `message`.
 - `Order` is a **13-field** struct with `bytes32 scopeId` appended at the end.
 - The `ClobAuth` EIP-712 domain is **short-form** — no `verifyingContract`.
-- The `Order` EIP-712 domain name is `"Prediction Market Protocol"`, **not** `"Polymarket CTF Exchange"`.
+- The `Order` EIP-712 domain name is `"Prediction Market Protocol"`, **not** the upstream V1 exchange domain.
 
-Full diff table: [`docs/diff-vs-polymarket-v1.md`](docs/diff-vs-polymarket-v1.md).
+Full diff table: [`docs/diff-vs-upstream-v1.md`](docs/diff-vs-upstream-v1.md).
 
 ## Phased delivery
 

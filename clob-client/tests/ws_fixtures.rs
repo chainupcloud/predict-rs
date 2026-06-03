@@ -1,5 +1,5 @@
 //! Frozen JSON fixtures captured from the AsyncAPI schemas
-//! (`pm-cup2026/services/clob-service/docs/asyncapi-{market,user}.json`).
+//! (the platform repo's `services/clob-service/docs/asyncapi-{market,user}.json`).
 //!
 //! These guard against silent serde drift: every event-type tag must
 //! deserialize into a unique variant, and the round-trip serialization must

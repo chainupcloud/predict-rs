@@ -1,8 +1,8 @@
 # predict-rs-clob-client
 
-Rust SDK for [`pm-cup2026`](https://github.com/chainupcloud/pm-cup2026) prediction-market platform — a Polymarket V1-compatible CLOB extended with multi-tenant `scopeId` isolation.
+Rust SDK for the prediction market platform — a CLOB extended with multi-tenant `scopeId` isolation.
 
-Counterpart of the official Go SDK [`pm-sdk-go`](https://github.com/chainupcloud/pm-sdk-go). Ported from Polymarket's [`rs-clob-client`](https://github.com/Polymarket/rs-clob-client) with specific extensions; signer is **byte-identical** to `pm-sdk-go/pkg/signer` (golden-tested).
+Counterpart of the official Go SDK `pm-sdk-go`. Ported from the upstream V1 `rs-clob-client` with specific extensions; signer is **byte-identical** to `pm-sdk-go/pkg/signer` (golden-tested).
 
 ```toml
 [dependencies]
@@ -28,7 +28,7 @@ predict-rs-clob-client = { git = "https://github.com/chainupcloud/predict-rs", p
 | Safe meta-tx primitives (`safe` module) | ✅ Gnosis Safe v1.3 `SafeTransaction` + `multisend` packed encoder | `SafeTransaction::{call, delegate_call}` + `multisend::encode` produce wire-identical calldata to the front-end. |
 | `SafeTx` / `LoginMessage` signing | ✅ Both EIP-712 types implemented on `PMCup26Signer` | `sign_safe_tx` and `sign_login_message` return Ethereum-`v` (27/28) signatures matching `Safe.execTransaction`'s on-chain verifier. |
 | Gamma `/auth/login` (JWT) | ✅ `Client::jwt_login` | One-shot `/auth/nonce` → sign `LoginMessage` → `/auth/login` → returns Bearer token for relayer auth. |
-| Relayer client (`relayer` module) | ✅ `RelayerClient::{submit, transaction, poll_until_terminal}` | Wire matches `pm-cup2026/services/relayer-service` (camelCase + the `safeTxnGas` typo). JWT or API-Key auth. |
+| Relayer client (`relayer` module) | ✅ `RelayerClient::{submit, transaction, poll_until_terminal}` | Wire matches the platform's `relayer-service` (camelCase + the `safeTxnGas` typo). JWT or API-Key auth. |
 
 ## Quick start
 
@@ -251,18 +251,18 @@ while let Some(event) = stream.next().await {
 }
 ```
 
-## Wire-level differences vs Polymarket V1
+## Wire-level differences vs upstream V1
 
-| Topic | Polymarket V1 | pm-cup2026 (this SDK) |
+| Topic | Upstream V1 | This SDK |
 |-------|---------------|------------------------|
 | `ClobAuth` struct | 4 fields | **5 fields** — `bytes32 scopeId` inserted between `nonce` and `message`. |
 | `Order` struct | 12 fields | **13 fields** — `bytes32 scopeId` appended at the end. |
-| `Order` EIP-712 domain `name` | `"Polymarket CTF Exchange"` | `"Prediction Market Protocol"` |
+| `Order` EIP-712 domain `name` | upstream V1 domain string | `"Prediction Market Protocol"` |
 | Auth headers | `POLY_API_KEY` / `POLY_SIGNATURE` / … | **`PRED_API_KEY` / `PRED_SIGNATURE` / …** |
 | HMAC base64 | URL-safe | **Standard** |
 | Contract addresses | Hard-coded `phf_map!` in `lib.rs` | Runtime config — caller supplies them. Example YAMLs under [`../examples/networks/`](../examples/networks/). |
 
-Full diff table: [`../docs/diff-vs-polymarket-v1.md`](../docs/diff-vs-polymarket-v1.md).
+Full diff table: [`../docs/diff-vs-upstream-v1.md`](../docs/diff-vs-upstream-v1.md).
 
 ## Module map
 
@@ -322,13 +322,13 @@ Seven SDK fixes landed during the runs in response to live-wire surprises (see c
 
 Things this SDK intentionally does **not** ship — typically because the backend doesn't expose them, not because we ran out of time:
 
-- **Hard-coded contract addresses** — Polymarket's `phf_map!` in `lib.rs` is rejected by design. Everything comes from runtime config.
+- **Hard-coded contract addresses** — the upstream V1 `phf_map!` pattern is rejected by design. Everything comes from runtime config.
 - **`/markets`, `/sampling-markets`, `/simplified-markets`** — market discovery goes through Gamma.
 - **`/rewards`, `/earnings/total`, `/reward-percentages`** + 4 more — tenants run their own incentive logic.
 - **`/notifications`, `/closed-only-mode`, `/account-status`, `/geoblock`** — not exposed by the CLOB.
 - **Gamma streaming** — Gamma is REST-only.
 - **EOA-broadcast `ctf split / merge / redeem`** — only `signatureType=2` (Safe) is supported. The SDK provides the building blocks (`safe`, `relayer`, `sign_safe_tx`, `jwt_login`) so callers can compose any Safe meta-tx — but it does not ship an EOA-direct broadcaster, since the backend does not honour those orders.
-- **Polymarket bridge, rtds, rfq** — Polymarket-proprietary endpoints not present here.
+- **Upstream `bridge`, `rtds`, `rfq`** — upstream V1-proprietary endpoints not present here.
 
 If the backend later ships any of these, the SDK can be extended without breaking the existing surface.
 

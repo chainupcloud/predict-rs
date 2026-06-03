@@ -1,6 +1,6 @@
 //! Request / response types for the `relayer-service` REST API.
 //!
-//! Field names and JSON tags mirror `pm-cup2026/services/relayer-service/pkg/types/types.go`
+//! Field names and JSON tags mirror the platform repo's `services/relayer-service/pkg/types/types.go`
 //! 1:1 (camelCase wire format).
 
 use serde::{Deserialize, Serialize};

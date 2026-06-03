@@ -9,7 +9,7 @@
 //! - `POST /submit` → `RelayerClient::submit` (returns `transactionID` immediately, async settlement)
 //! - `GET /transaction?id=<txId>` → `RelayerClient::transaction` (poll for final state)
 //!
-//! Wire shape verified against `pm-cup2026/services/relayer-service/pkg/types/types.go`
+//! Wire shape verified against the platform repo's `services/relayer-service/pkg/types/types.go`
 //! and the front-end reference at `apps/user-dapp/src/hooks/useSetupSteps.ts:563`.
 
 pub mod client;

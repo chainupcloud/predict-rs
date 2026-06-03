@@ -1,6 +1,6 @@
 //! `predict-cli wallet` subcommands — local-only key + config-file management.
 //!
-//! Mirrors `polymarket wallet create / import / address / show / reset`. All actions touch
+//! Mirrors the upstream CLI's `wallet create / import / address / show / reset`. All actions touch
 //! `<config-dir>/config.toml` only; no network calls.
 
 use std::io::{BufRead, Write as _};

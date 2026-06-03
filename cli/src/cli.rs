@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use crate::output::Format;
 
 #[derive(Debug, Parser)]
-#[command(name = "predict-cli", version, about = "pm-cup2026 terminal client", long_about = None)]
+#[command(name = "predict-cli", version, about = "Prediction market terminal client", long_about = None)]
 pub struct Cli {
     /// Tenant root host. The CLOB / Gamma / WebSocket endpoints are derived using the canonical
     /// canonical subdomain pattern (`clob-api.<host>` / `gamma-api.<host>` / `clob-ws.<host>`).
@@ -128,14 +128,14 @@ pub enum Command {
     /// Local wallet / config-file management (create / import / address / show / reset).
     #[command(subcommand)]
     Wallet(crate::wallet_commands::WalletCommand),
-    /// On-chain approval lookup (read-only). Mirrors `polymarket approve check`.
+    /// On-chain approval lookup (read-only). Mirrors the upstream CLI's `approve check`.
     #[command(subcommand)]
     Approve(crate::approve_commands::ApproveCommand),
-    /// Interactive REPL. Mirrors `polymarket shell` — each line parses as a fresh
+    /// Interactive REPL. Mirrors the upstream CLI's `shell` — each line parses as a fresh
     /// `predict-cli <args>` invocation; env vars / config-file state apply per line.
     Shell,
     /// Guided first-time setup wizard (wallet + tenant + Safe + L2 API key).
-    /// Mirrors `polymarket setup`, adapted for multi-tenant topology.
+    /// Mirrors the upstream CLI's `setup`, adapted for multi-tenant topology.
     Setup,
     /// Conditional Token Framework helpers — pure off-chain ID calculations
     /// (`condition-id` / `position-id`), RPC-backed `collection-id`, and Safe-mode
@@ -255,7 +255,7 @@ pub struct BalanceArgs {
 pub enum SignatureTypeArg {
     /// signatureType=0 — direct EOA signing.
     Eoa,
-    /// signatureType=1 — Polymarket proxy wallet.
+    /// signatureType=1 — upstream V1 proxy wallet.
     Proxy,
     /// signatureType=2 — Gnosis Safe (1-of-1) — default.
     GnosisSafe,
