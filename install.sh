@@ -18,9 +18,10 @@ get_target() {
       esac
       ;;
     Linux)
+      # Linux assets are statically linked against musl — no glibc requirement.
       case "$arch" in
-        x86_64)  echo "x86_64-unknown-linux-gnu" ;;
-        aarch64) echo "aarch64-unknown-linux-gnu" ;;
+        x86_64)  echo "x86_64-unknown-linux-musl" ;;
+        aarch64) echo "aarch64-unknown-linux-musl" ;;
         *) echo "Unsupported architecture: $arch" >&2; exit 1 ;;
       esac
       ;;

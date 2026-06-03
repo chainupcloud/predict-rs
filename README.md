@@ -26,7 +26,7 @@ Shipped surface:
 
 ## Install
 
-One-line install (macOS / Linux, x86_64 / arm64) — downloads the latest release binary, verifies its sha256, installs to `/usr/local/bin`:
+One-line install (macOS / Linux, x86_64 / arm64) — downloads the latest release binary, verifies its sha256, installs to `/usr/local/bin`. Linux binaries are statically linked against musl, so they run on any distro regardless of glibc version:
 
 ```bash
 curl -sSfL https://raw.githubusercontent.com/chainupcloud/predict-rs/main/install.sh | sh
