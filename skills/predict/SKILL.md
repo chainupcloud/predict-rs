@@ -63,9 +63,17 @@ Manual equivalent:
 predict-cli wallet create                 # fresh EOA, stored 0600 in <config-dir>/config.toml
 predict-cli wallet import 0xYOURKEY       # or import an existing key
 predict-cli auth create-key               # L2 API key (or derive-key to recover an existing one)
-predict-cli wallet detect-safe            # fetch + persist the Safe address linked to the key
+predict-cli wallet set-safe 0xSAFE        # persist the funded Safe address
 predict-cli wallet show                   # address + Safe + signature type + config source
 ```
+
+> **Careful with `wallet detect-safe`.** It trusts the server's `proxy_wallet`
+> field and **overwrites** the stored Safe address. Live testing has seen that
+> field point at an undeployed, unfunded address while the real funded Safe was
+> elsewhere. If you use it, cross-check the result before trading: the address
+> must hold the USDW balance (`balance --asset-type collateral` should match
+> on-chain `USDW.balanceOf(safe)`) and have contract code deployed. When in
+> doubt, `wallet set-safe` the known-funded address instead.
 
 Key facts that prevent confusion later:
 
@@ -133,6 +141,15 @@ accept comma-separated ids, ≤ 500 per call.
 Always fetch `fee-rate` and `tick-size` for the token first; the server rejects
 orders that miss the fee or violate price granularity.
 
+**Pick the right exchange contract.** The platform runs two exchanges and the
+order signature embeds the exchange address (EIP-712 `verifyingContract`):
+standalone binary markets settle on the **CTF Exchange**, while sports /
+multi-outcome families settle on the **Neg Risk CTF Exchange** (addresses in
+the network YAML / `gamma public-info`). An order signed against the wrong one
+is rejected with `EXECUTION_ERROR: INVALID_SIGNATURE: signer mismatch` — if you
+hit that with a correct key and maker, re-sign with the other exchange via
+`--exchange-address <addr>` (or `PM_EXCHANGE_ADDRESS`).
+
 Limit order (default Safe mode — note `--maker` is **required** and is the Safe
 address from `wallet show`; it is *not* auto-filled from config):
 
@@ -167,7 +184,7 @@ predict-cli order list                       # open orders
 predict-cli order get <ORDER_ID>
 predict-cli order cancel <ORDER_ID>
 predict-cli order cancel-many id1,id2,id3    # ≤ 3000
-predict-cli order cancel-market --condition-id 0x…
+predict-cli order cancel-market --market 0xCONDITION_ID   # and/or --asset-id <TOKEN_ID>
 predict-cli order cancel-all                 # everything for the API key — confirm first
 predict-cli order replace --cancel id1 --orders-file new.json   # new.json from --dry-run output
 predict-cli order post-batch …               # ≤ 15 orders, shared side/fee/maker
@@ -177,14 +194,25 @@ predict-cli order post-batch …               # ≤ 15 orders, shared side/fee/
 
 ```bash
 predict-cli trade --asset-id <TOKEN_ID> --limit 50   # trade history (L2-auth)
-predict-cli balance --asset-type collateral          # USDW (add --update to refresh)
+predict-cli balance --asset-type collateral          # USDW
 predict-cli balance --asset-type conditional --token <TOKEN_ID>
 ```
 
+(`balance --update` currently fails against the live backend — the
+`/balance-allowance/update` endpoint returns an empty body the SDK can't
+decode. Plain `balance` reads are accurate; cross-check on-chain when it
+matters.)
+
 A trade settles in stages — on `/ws/user` (and in `trade` output) the status
-walks `MATCHED → MINED → CONFIRMED` (UPPERCASE; `RETRYING` on relayer retry).
-Treat a fill as final only at `CONFIRMED`; `MATCHED` means the engine matched it
-but on-chain settlement is still pending.
+walks `MATCHED → MINED → CONFIRMED` (UPPERCASE; `RETRYING` on relayer retry;
+fast settlement may skip `MINED` entirely). Treat a fill as final only at
+`CONFIRMED`; `MATCHED` means the engine matched it but on-chain settlement is
+still pending. Two wire quirks to expect on `/ws/user` trade events: the
+`MATCHED` frame can carry the *complement side's* price under `match_type:
+"MINT"` (full-set mint against your order), and later frames may switch
+`size`/`price` to raw 6-decimal units (`5000000` = 5 shares). Fees on BUY are
+taken **in shares** (you receive slightly less than `size`); maker-program
+rebates show up as `MAKER_REBATE` rows in `data activity`.
 
 ## 8. Positions & PnL
 
@@ -209,9 +237,11 @@ network-config YAML (chain id, RPC, contract addresses — see
 predict-cli approve check --network-config <yaml>
 predict-cli approve set   --network-config <yaml> --execute
 
-predict-cli ctf split  --network-config <yaml> --condition-id 0x… --amount 1000000 --execute
-predict-cli ctf merge  --network-config <yaml> --condition-id 0x… --amount 1000000 --execute
-predict-cli ctf redeem --network-config <yaml> --condition-id 0x… --execute   # only after resolution
+# --amount is RAW 6-decimal units: 1000000 = 1 USDW. Run without --execute
+# first and read back the dry-run plan's amount before submitting.
+predict-cli ctf split  --network-config <yaml> --condition-id 0x… --partition 1,2 --amount 1000000 --execute
+predict-cli ctf merge  --network-config <yaml> --condition-id 0x… --partition 1,2 --amount 1000000 --execute
+predict-cli ctf redeem --network-config <yaml> --condition-id 0x… --index-sets 1,2 --execute   # only after resolution
 ```
 
 `redeem` succeeds only once the condition is resolved on-chain (non-zero
@@ -236,7 +266,8 @@ monitoring or to wait for a fill.
 |---------|-----|
 | `no private key configured` | `predict-cli wallet create` / `import`, or set `PM_PRIVATE_KEY` |
 | 401 / `authentication failed` | `predict-cli auth derive-key` (existing key) or `auth create-key` |
-| `--maker is required for signature_type=gnosis-safe` | pass the Safe address from `wallet show`; or `wallet detect-safe` first |
+| `--maker is required for signature_type=gnosis-safe` | pass the Safe address from `wallet show` (use `set-safe` to persist; treat `detect-safe` output as untrusted — see §2) |
+| `INVALID_SIGNATURE: signer mismatch` on `POST /order` | wrong exchange for this market — re-sign with the other one via `--exchange-address` (CTF vs Neg Risk, see §6) |
 | price rejected | re-check `tick-size` — too many decimals for this market |
 | order below minimum | raise size; the per-event minimum is server-enforced |
 | allowance / transfer failures on split or first order | `approve check`, then `approve set --execute` |

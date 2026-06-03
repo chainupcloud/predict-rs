@@ -72,6 +72,18 @@ on-chain `ECDSA.recover` path that the relayer takes for both EOA and
 `POLY_GNOSIS_SAFE` signature types. The server-side L2 verifier accepts both `{0, 1}`
 and `{27, 28}`; we standardise on `{27, 28}` for end-to-end parity.
 
+## Two exchange contracts — match the signature to the market
+
+The platform settles standalone binary markets on the **CTF Exchange** and
+sports / multi-outcome families on the **Neg Risk CTF Exchange** (addresses in
+the network YAML and `gamma public-info`). The order signature embeds the
+exchange address as the EIP-712 `verifyingContract`, so an order signed against
+the wrong exchange fails at POST with
+`EXECUTION_ERROR: INVALID_SIGNATURE: signer mismatch`. Gamma does not currently
+expose a per-market neg-risk flag on the live backend; when a correctly-keyed
+order hits that error, re-sign with the other exchange
+(`--exchange-address` / `PM_EXCHANGE_ADDRESS`). Verified live 2026-06-03.
+
 ## Safe-wallet architecture (default)
 
 With `signatureType = 2` (PolyGnosisSafe):

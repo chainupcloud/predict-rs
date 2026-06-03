@@ -122,7 +122,7 @@ Every command that touches the chain (`predict-cli approve check / set`, `predic
 ```bash
 predict-cli approve check --network-config examples/networks/monad-hermestrade.yaml
 predict-cli approve set   --network-config examples/networks/monad-hermestrade.yaml --execute
-predict-cli ctf split     --network-config examples/networks/monad-hermestrade.yaml --condition-id 0x… --partition 1,2 --amount 1000 --execute
+predict-cli ctf split     --network-config examples/networks/monad-hermestrade.yaml --condition-id 0x… --partition 1,2 --amount 1000000 --execute   # amount = raw 6-decimal units (1000000 = 1 USDW)
 ```
 
 The YAML is the single source of truth for chain id, RPC URL, contract addresses (USDW, CTF, exchanges), and the relayer endpoint. It's the same shape the backend deploy tooling uses.
@@ -306,8 +306,8 @@ predict-cli ctf collection-id --network-config examples/networks/monad-hermestra
 
 # Safe-mode writes — same path-B flow as `predict-cli approve set`. Default dry-run; --execute submits.
 predict-cli ctf redeem --network-config <yaml> --condition-id 0x… --index-sets 1
-predict-cli ctf split  --network-config <yaml> --condition-id 0x… --partition 1,2 --amount 1000
-predict-cli ctf merge  --network-config <yaml> --condition-id 0x… --partition 1,2 --amount 1000
+predict-cli ctf split  --network-config <yaml> --condition-id 0x… --partition 1,2 --amount 1000000   # raw 6-decimal units
+predict-cli ctf merge  --network-config <yaml> --condition-id 0x… --partition 1,2 --amount 1000000   # raw 6-decimal units
 ```
 
 Amounts are in raw smallest units (USDW has 6 decimals, so 1 USDW = `1_000_000`). For `split` / `merge`, ensure the Safe holds enough collateral (split) or a full outcome-token set (merge); `redeem` only succeeds after the condition is reported on-chain.
