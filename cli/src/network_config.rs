@@ -240,6 +240,7 @@ mod tests {
                 usdw: None,
                 usd_wrapper: None,
                 usdc: None,
+                usdw_underlying: None,
             }
         }
     }
