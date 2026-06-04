@@ -3,7 +3,7 @@ set -e
 
 REPO="chainupcloud/predict-rs"
 BINARY="predict-cli"
-INSTALL_DIR="/usr/local/bin"
+INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
 get_target() {
   os=$(uname -s)
