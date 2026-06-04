@@ -354,6 +354,14 @@ async fn run_initiate(args: &Cli, a: &InitiateArgs, fmt: Format) -> Result<()> {
             Duration::from_secs(a.poll_timeout_secs.max(5)),
         )
         .await?;
+    // The pre-read id can race: `initiateUnwrap` assigns the id at execution. Confirm from
+    // ground truth — nextRequestId incremented past ours, so our id = current nextRequestId - 1.
+    if let Ok(now_next) = w.nextRequestId().call().await {
+        if let Some(actual) = now_next.checked_sub(U256::from(1u64)) {
+            println!("confirmed request_id: {actual} — claim after the delay with:");
+            println!("  predict-cli withdraw claim --request-id {actual}");
+        }
+    }
     safe_exec::print_plan(&plan, fmt, false, Some(safe_exec::final_state_json(&final_tx)))
 }
 
