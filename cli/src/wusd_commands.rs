@@ -134,7 +134,14 @@ pub async fn run_deposit(args: &Cli, a: &DepositArgs, fmt: Format) -> Result<()>
             .get_receipt()
             .await
             .context("approve receipt")?;
-        println!("  approved: tx {:?}", receipt.transaction_hash);
+        println!(
+            "  approved: tx {:?} ({})",
+            receipt.transaction_hash,
+            if receipt.status() { "ok" } else { "REVERTED" }
+        );
+        if !receipt.status() {
+            bail!("approve transaction reverted (tx {:?})", receipt.transaction_hash);
+        }
     }
 
     let wrapper_c = IUSDWrapper::new(wrapper, &provider);
