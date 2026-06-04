@@ -1,0 +1,33 @@
+# predict-cli — complete configuration for Monad mainnet (tenant hermestrade.xyz).
+#
+# Copy this file to ~/.config/predict/config.toml (mode 0600) and fill in `private_key`
+# and `safe_address` with your own values. Every other field is real Monad / hermestrade.xyz.
+# Any field can be overridden per-command with the matching flag (--network, --tenant, …).
+
+# --- Your wallet (required). Keep this file mode 0600; the key is never read from an env var. ---
+private_key    = "0xYOUR_64_HEX_PRIVATE_KEY"
+
+# Gnosis Safe (the default signing mode): the Safe holds your USDW / CTF balances and is the
+# order maker. Set it to your Safe address (create / detect with
+# `predict-cli wallet set-safe <addr>` or `predict-cli wallet detect-safe`).
+safe_address   = "0xYOUR_SAFE_ADDRESS"
+
+# --- Network + identity (real Monad / hermestrade values) ---
+
+# Built-in network: supplies chain id 143, the hermestrade endpoints, the CtfExchange, and
+# every contract address. In most setups this single line is all the network config you need.
+network        = "monad"
+
+# Tenant scopeId (bytes32) for hermestrade.xyz — embedded in every signed ClobAuth and Order.
+scope_id       = "0x1811a132dd725e2c40475aa52df39025b36544f7a70825968e32b28da2196e95"
+
+# Signing mode. gnosis-safe (default): the EOA from `private_key` signs, the Safe is the maker.
+signature_type = "gnosis-safe"
+
+# --- Optional: these are already provided by the `monad` network; set only to override. ---
+
+# Tenant host (same network, different tenant). Defaults to the network's domain.
+tenant         = "hermestrade.xyz"
+
+# Chain id. The `monad` network already provides 143.
+chain_id       = 143

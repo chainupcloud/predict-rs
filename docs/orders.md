@@ -82,7 +82,7 @@ the wrong exchange fails at POST with
 `EXECUTION_ERROR: INVALID_SIGNATURE: signer mismatch`. Gamma does not currently
 expose a per-market neg-risk flag on the live backend; when a correctly-keyed
 order hits that error, re-sign with the other exchange
-(`--exchange-address` / `PM_EXCHANGE_ADDRESS`). Verified live 2026-06-03.
+(`--exchange-address`, else the selected network's exchange). Verified live 2026-06-03.
 
 ## Safe-wallet architecture (default)
 
@@ -107,13 +107,13 @@ use predict_rs_clob_client::types::{ScopeId, U256};
 use rust_decimal_macros::dec;
 
 # async fn run() -> predict_rs_clob_client::Result<()> {
-let signer = PMCup26Signer::from_hex(&std::env::var("PM_PRIVATE_KEY").unwrap(), 11_155_420)?
-    .with_scope_id(ScopeId::from_hex("0x42").unwrap())
-    .with_exchange("0xC6e9081EcaD84AfB3a772933Fb865AB8A9C317d9".parse().unwrap());
+let signer = PMCup26Signer::from_hex("0x<your-private-key>", 143)?
+    .with_scope_id(ScopeId::from_hex("0x1811a132dd725e2c40475aa52df39025b36544f7a70825968e32b28da2196e95").unwrap())
+    .with_exchange("0x017641abFa4264121237023f9Fe678BF00F60De8".parse().unwrap());
 
 let client = Client::builder()
     .endpoints(Endpoints::from_tenant("hermestrade.xyz")?)
-    .chain_id(11_155_420)
+    .chain_id(143)
     .signer_address(signer.address())
     .build()?;
 
@@ -146,19 +146,15 @@ println!("orderID={} status={}", resp.order_id, resp.status);
 ## CLI examples
 
 ```bash
-# Place a limit BUY for 100 @ 0.34, scope 0x42 on OP Sepolia.
-predict-cli --tenant hermestrade.xyz \
-   --chain-id 11155420 --scope-id 0x42 \
-   --private-key 0x<key> \
-   --exchange-address 0xC6e9... \
-   order create \
-   --token 100 --side buy --price 0.34 --size 100 \
-   --fee-rate-bps 50 \
-   --maker 0xSafe... \
-   --signature-type gnosis-safe
+# Place a limit BUY for 100 @ 0.34 on Monad. The default `monad` network supplies the
+# chain id (143), endpoints, and exchange; key / scopeId / Safe maker come from config.toml.
+predict-cli order create \
+   --token <TOKEN_ID> --side buy --price 0.34 --size 100 \
+   --fee-rate-bps 50
 
 # Dry-run: print the signed envelope JSON, do NOT POST.
-predict-cli ... order create --token 100 ... --dry-run
+predict-cli order create --token <TOKEN_ID> --side buy --price 0.34 --size 100 \
+   --fee-rate-bps 50 --dry-run
 
 # Cancel single / batch / market.
 predict-cli ... order cancel snowflake-1

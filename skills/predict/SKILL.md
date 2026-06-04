@@ -32,22 +32,20 @@ curl -sSfL https://raw.githubusercontent.com/chainupcloud/predict-rs/main/instal
 If you are working inside a `predict-rs` checkout, `cargo build --release` and
 `target/release/predict-cli` works too.
 
-## 1. Point at a tenant
+## 1. Point at a network
 
-The platform is multi-tenant; nothing is hard-coded. One flag (or env var)
-selects the deployment — it derives `clob-api.<host>` / `gamma-api.<host>` /
-`wss://clob-ws.<host>` automatically:
+The CLI ships built-in networks; `--network <name>` selects one and defaults to `monad`
+(tenant hermestrade.xyz). The selected network provides the endpoints, chain id, exchange, and
+contract addresses, so most commands need no connection flags:
 
 ```bash
-predict-cli --tenant hermestrade.xyz ok        # health check
-predict-cli --tenant hermestrade.xyz endpoints # show derived URLs + chain id
+predict-cli ok            # health check (default monad network)
+predict-cli endpoints     # show the resolved network / endpoints / chain id / exchange
 ```
 
-Env vars mirror every global flag: `PM_NETWORK`, `PM_TENANT`, `PM_CLOB_ENDPOINT`,
-`PM_GAMMA_ENDPOINT`, `PM_WS_ENDPOINT`, `PM_CHAIN_ID`, `PM_SCOPE_ID`. Export
-`PM_TENANT` once instead of repeating `--tenant`. Use `--clob-endpoint <url>`
-only for non-canonical hostnames. (There is no env var for the private key — it
-comes from `--private-key` or `config.toml`.)
+`--tenant hermestrade.xyz` overrides only the host (same network, different tenant);
+`--clob-endpoint <url>` targets a raw CLOB URL for local dev. The private key comes from
+`--private-key` or `config.toml` — there is no env var for it.
 
 ## 2. Wallet & auth (one-time)
 
@@ -81,8 +79,8 @@ Key facts that prevent confusion later:
 - **Default signature type is `gnosis-safe`**: the EOA only signs; a 1-of-1
   Safe holds the USDW and outcome tokens and is the order `maker`. Balances and
   positions belong to the **Safe address**, not the EOA.
-- Config lives in `~/.config/pm/config.toml` (Linux) or
-  `~/Library/Application Support/pm` (macOS).
+- Config lives in `~/.config/predict/config.toml` (Linux) or
+  `~/Library/Application Support/predict` (macOS).
 - Prefer storing the key in `config.toml` (via `wallet create` / `import` / `setup`)
   over `--private-key` — the flag leaks into shell history and process args. There
   is no `PM_PRIVATE_KEY` env var (a key in the environment leaks via `/proc`).
@@ -151,7 +149,7 @@ multi-outcome families settle on the **Neg Risk CTF Exchange** (addresses in
 the built-in network registry / `gamma public-info`). An order signed against the wrong one
 is rejected with `EXECUTION_ERROR: INVALID_SIGNATURE: signer mismatch` — if you
 hit that with a correct key and maker, re-sign with the other exchange via
-`--exchange-address <addr>` (or `PM_EXCHANGE_ADDRESS`).
+`--exchange-address <addr>`.
 
 Limit order (default Safe mode — note `--maker` is **required** and is the Safe
 address from `wallet show`; it is *not* auto-filled from config):

@@ -44,8 +44,7 @@ predict-cli gamma events get how-many-fed-rate-cuts-in-2026-pm-406282
 Override the network, tenant, or raw URL when you need to:
 
 ```bash
-predict-cli --network monad ok                                    # select a built-in network (default)
-predict-cli --tenant other.xyz ok                                 # same network, different tenant host
+predict-cli --network monad ok                                    # select the built-in network explicitly (default)
 predict-cli --clob-endpoint https://clob-api.hermestrade.xyz time # raw CLOB URL (local dev / non-canonical host)
 ```
 
@@ -80,26 +79,26 @@ predict-cli order list
 predict-cli order cancel <ORDER_ID>
 ```
 
-The config dir defaults to `~/.config/pm` (Linux, mode 0700); override with `--config-dir`.
+The config dir defaults to `~/.config/predict` (Linux, mode 0700); override with `--config-dir`.
 
 ## Configuration
 
 ### The config file (`config.toml`)
 
 `predict-cli` reads its wallet and connection settings from one file —
-`<config-dir>/config.toml` (default `~/.config/pm/config.toml`, mode 0600). Generate it with
+`<config-dir>/config.toml` (default `~/.config/predict/config.toml`, mode 0600). Generate it with
 `predict-cli setup` (guided) or the `predict-cli wallet …` subcommands; you rarely edit it by
-hand. A complete example:
+hand. A complete Monad / hermestrade.xyz config (copy-ready template ships at
+[`examples/config.toml`](../examples/config.toml)):
 
 ```toml
-private_key    = "0xabc…"          # EOA that signs (mode 0600; never printed)
-network        = "monad"           # built-in network → chain id, endpoints, exchange, contracts
-scope_id       = "0x1811…6e95"     # tenant isolation key (bytes32), embedded in every signature
-signature_type = "gnosis-safe"     # default; the Safe is the order maker and holds the funds
-safe_address   = "0x7e63…c2fe"     # the Safe (required in gnosis-safe mode)
-
-# Optional — omit to inherit from the selected network:
-# tenant       = "hermestrade.xyz" # point the network at a different tenant host
+private_key    = "0xYOUR_64_HEX_PRIVATE_KEY"   # your EOA; mode 0600, never read from env
+safe_address   = "0xYOUR_SAFE_ADDRESS"         # gnosis-safe: the Safe holds funds and is the maker
+network        = "monad"                        # supplies chain id 143, endpoints, exchange, contracts
+scope_id       = "0x1811a132dd725e2c40475aa52df39025b36544f7a70825968e32b28da2196e95"
+signature_type = "gnosis-safe"
+# Optional — already provided by the monad network:
+# tenant       = "hermestrade.xyz"
 # chain_id     = 143
 ```
 
@@ -125,7 +124,7 @@ The default is `gnosis-safe`. Persist a different choice with `predict-cli walle
 
 ```bash
 # From the server (returns the canonical scope for your tenant)
-curl https://clob-api.<tenant>/auth/nonce | jq -r .scopeId
+curl https://clob-api.hermestrade.xyz/auth/nonce | jq -r .scopeId
 
 # Or via the CLI
 predict-cli auth nonce | grep scopeId
