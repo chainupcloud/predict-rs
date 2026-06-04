@@ -80,19 +80,34 @@ predict-cli order list
 predict-cli order cancel <ORDER_ID>
 ```
 
-The config dir defaults to `~/.config/pm` (Linux, mode 0700); override with `--config-dir` / `PM_CONFIG_DIR`.
+The config dir defaults to `~/.config/pm` (Linux, mode 0700); override with `--config-dir`.
 
 ## Configuration
 
-### Resolution order
+### The config file (`config.toml`)
 
-Every connection flag (`--network`, `--tenant`, `--clob-endpoint`, `--chain-id`, `--scope-id`, `--private-key`, …) resolves in this order:
+`predict-cli` reads its wallet and connection settings from one file —
+`<config-dir>/config.toml` (default `~/.config/pm/config.toml`, mode 0600). Generate it with
+`predict-cli setup` (guided) or the `predict-cli wallet …` subcommands; you rarely edit it by
+hand. A complete example:
 
-1. CLI flag — wins.
-2. Env var — `PM_NETWORK`, `PM_TENANT`, `PM_CLOB_ENDPOINT`, `PM_CHAIN_ID`, `PM_SCOPE_ID`, `PM_SIGNATURE_TYPE`, `PM_EXCHANGE_ADDRESS`, `PM_CONFIG_DIR`, `PM_CREDENTIALS_FILE`, `PM_OUTPUT`. (The private key has no env var — supply it via `--private-key` or `config.toml`.)
-3. Stored config — `<config-dir>/config.toml` (written by `predict-cli wallet …` / `setup`): holds `private_key`, `chain_id`, `scope_id`, `signature_type`, `safe_address`, `network`, `tenant`. The private key lives here at mode 0600 and is **never** read from an env var.
+```toml
+private_key    = "0xabc…"          # EOA that signs (mode 0600; never printed)
+network        = "monad"           # built-in network → chain id, endpoints, exchange, contracts
+scope_id       = "0x1811…6e95"     # tenant isolation key (bytes32), embedded in every signature
+signature_type = "gnosis-safe"     # default; the Safe is the order maker and holds the funds
+safe_address   = "0x7e63…c2fe"     # the Safe (required in gnosis-safe mode)
 
-Empty values are treated as unset. With nothing configured, connection values fall back to the selected network (default `monad`), so most commands work with no flags at all.
+# Optional — omit to inherit from the selected network:
+# tenant       = "hermestrade.xyz" # point the network at a different tenant host
+# chain_id     = 143
+```
+
+Only `private_key` is required for signing; everything else has a default — `network` defaults
+to `monad`, which supplies the chain id, endpoints, exchange, and all contract addresses, so
+read-only commands need no config at all. Any field is overridden for a single command by its
+matching flag (`--network`, `--tenant`, `--scope-id`, `--signature-type`, `--private-key`, …),
+which wins over the file.
 
 ### Signature types
 
@@ -102,7 +117,7 @@ Empty values are treated as unset. With nothing configured, connection values fa
 | `proxy` | 1 — upstream V1 proxy wallet | Legacy / interop. |
 | `gnosis-safe` (**default**) | 2 — 1-of-1 Gnosis Safe | **Default.** EOA signs; the Safe is the `maker` and holds the funds. |
 
-The default is `gnosis-safe`. Persist a different choice with `predict-cli wallet create --signature-type eoa`, or override per-invocation via `--signature-type <eoa|proxy|gnosis-safe>` / `PM_SIGNATURE_TYPE`.
+The default is `gnosis-safe`. Persist a different choice with `predict-cli wallet create --signature-type eoa`, or override per-invocation via `--signature-type <eoa|proxy|gnosis-safe>`.
 
 ### `scopeId` — multi-tenant isolation
 
@@ -116,11 +131,11 @@ curl https://clob-api.<tenant>/auth/nonce | jq -r .scopeId
 predict-cli auth nonce | grep scopeId
 ```
 
-Set it via flag, env var, or `predict-cli wallet create --scope-id 0x…`.
+Set it with the `--scope-id` flag or `predict-cli wallet create --scope-id 0x…` (stored in `config.toml`).
 
 ### Networks — `--network`
 
-The CLI ships built-in network definitions compiled into the binary; `--network <name>` (env `PM_NETWORK`, default `monad`) selects one. The selected network is the **single source of truth** for the tenant domain + endpoints (clob / gamma / ws / data / relayer), chain id, the CtfExchange the order signer binds to, and every contract address (USDW, CTF, exchanges, fee modules). Read, trade, `approve`, and `ctf` commands therefore all work with no per-command address or endpoint flags:
+The CLI ships built-in network definitions compiled into the binary; `--network <name>` (default `monad`) selects one. The selected network is the **single source of truth** for the tenant domain + endpoints (clob / gamma / ws / data / relayer), chain id, the CtfExchange the order signer binds to, and every contract address (USDW, CTF, exchanges, fee modules). Read, trade, `approve`, and `ctf` commands therefore all work with no per-command address or endpoint flags:
 
 ```bash
 predict-cli endpoints                  # see exactly what the selected network resolves to
@@ -417,7 +432,7 @@ predict-cli -o table <cmd> ...       # default — human-readable
 predict-cli -o json  <cmd> ...       # machine-readable; pipe through jq
 ```
 
-Or set `PM_OUTPUT=json` once and forget about it.
+The default is `table`.
 
 ## License
 
