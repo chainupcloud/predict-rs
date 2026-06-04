@@ -3,10 +3,10 @@
 Terminal client for the prediction market platform. Browse markets, place orders, manage positions — with feature parity for everything the backend exposes (see [Non-goals](#non-goals) for what it deliberately skips).
 
 ```bash
-$ predict-cli --tenant hermestrade.xyz time
+$ predict-cli time
 2026-05-20T02:25:10Z
 
-$ predict-cli --tenant hermestrade.xyz book 3404...0576
+$ predict-cli book 3404...0576
 asks:
   0.75 × 5
 bids:
@@ -30,54 +30,57 @@ Requires Rust 1.88+ (pinned via `rust-version` in the workspace `Cargo.toml`).
 
 ### Read-only — no wallet needed
 
+Out of the box the CLI targets the built-in `monad` network (tenant `hermestrade.xyz`) — no connection flags required:
+
 ```bash
-# Point at a tenant — clob-api / gamma-api / clob-ws are derived automatically.
-predict-cli --tenant hermestrade.xyz ok                  # server health
-predict-cli --tenant hermestrade.xyz time
-predict-cli --tenant hermestrade.xyz endpoints           # show derived URLs + chain id
-predict-cli --tenant hermestrade.xyz book   <TOKEN_ID>
-predict-cli --tenant hermestrade.xyz midpoint <TOKEN_ID>
-predict-cli --tenant hermestrade.xyz gamma events get how-many-fed-rate-cuts-in-2026-pm-406282
+predict-cli ok                      # server health
+predict-cli time
+predict-cli endpoints               # show the resolved network / endpoints / chain id / exchange
+predict-cli book     <TOKEN_ID>
+predict-cli midpoint <TOKEN_ID>
+predict-cli gamma events get how-many-fed-rate-cuts-in-2026-pm-406282
 ```
 
-Or supply the CLOB URL directly (useful for non-canonical hostnames or local dev):
+Override the network, tenant, or raw URL when you need to:
 
 ```bash
-predict-cli --clob-endpoint https://clob-api.hermestrade.xyz time
+predict-cli --network monad ok                                    # select a built-in network (default)
+predict-cli --tenant other.xyz ok                                 # same network, different tenant host
+predict-cli --clob-endpoint https://clob-api.hermestrade.xyz time # raw CLOB URL (local dev / non-canonical host)
 ```
 
 JSON for scripts:
 
 ```bash
-predict-cli --tenant hermestrade.xyz -o json book 3404...0576 | jq '.bids[0]'
+predict-cli -o json book 3404...0576 | jq '.bids[0]'
 ```
 
 ### Trading — wallet + L2 credentials
 
+Fastest path is the guided wizard, which writes wallet, scopeId, Safe, and an L2 key into `config.toml`:
+
 ```bash
-# 1. Wallet — pick one
-predict-cli wallet create                                # generates a fresh EOA, stores 0600
-predict-cli wallet import 0xYOURKEY                      # or import an existing one
-predict-cli wallet set-safe 0xYOUR_SAFE_ADDRESS          # required when signature-type = gnosis-safe
-predict-cli wallet show                                  # eoa + safe + source
+predict-cli setup
+```
 
-# 2. Create an L2 API key (writes credentials.json mode 0600)
-predict-cli auth create-key --output json > credentials.json
+Or configure by hand:
 
-# 3. Trade
-export PM_TENANT=hermestrade.xyz
-export PM_CHAIN_ID=143
-export PM_SCOPE_ID=0x1811a132dd725e2c40475aa52df39025b36544f7a70825968e32b28da2196e95
-export PM_CREDENTIALS_FILE=$PWD/credentials.json
+```bash
+# 1. Wallet + identity → config.toml (mode 0600). scopeId is the tenant isolation key.
+predict-cli wallet create --scope-id 0x1811…6e95     # fresh EOA + scopeId   (or: predict-cli wallet import 0xKEY)
+predict-cli wallet set-safe 0xYOUR_SAFE_ADDRESS      # gnosis-safe (default): the Safe holds funds and is the maker
+predict-cli wallet show                              # eoa + safe + source
 
+# 2. Trade. The monad network supplies chain / endpoints / exchange; config.toml supplies
+#    the key, scopeId, and the Safe maker — no --tenant / --chain-id / --scope-id / --maker.
+#    The L2 API key is derived on demand, so no credentials file is required.
 predict-cli balance --asset-type collateral
-predict-cli order create --token 3404...0576 --side buy --price 0.10 --size 5 \
-                --fee-rate-bps 20 --maker 0xYOUR_SAFE
+predict-cli order create --token <TOKEN_ID> --side buy --price 0.10 --size 5 --fee-rate-bps 20
 predict-cli order list
 predict-cli order cancel <ORDER_ID>
 ```
 
-The first run prompts auto-pick a sensible config dir (`~/.config/pm` on Linux, mode 0700). Override with `--config-dir` or `PM_CONFIG_DIR`.
+The config dir defaults to `~/.config/pm` (Linux, mode 0700); override with `--config-dir` / `PM_CONFIG_DIR`.
 
 ## Configuration
 
@@ -87,9 +90,9 @@ Every connection flag (`--network`, `--tenant`, `--clob-endpoint`, `--chain-id`,
 
 1. CLI flag — wins.
 2. Env var — `PM_NETWORK`, `PM_TENANT`, `PM_CLOB_ENDPOINT`, `PM_CHAIN_ID`, `PM_SCOPE_ID`, `PM_SIGNATURE_TYPE`, `PM_EXCHANGE_ADDRESS`, `PM_CONFIG_DIR`, `PM_CREDENTIALS_FILE`, `PM_OUTPUT`. (The private key has no env var — supply it via `--private-key` or `config.toml`.)
-3. Stored config — `<config-dir>/config.toml` (written by `predict-cli wallet …`).
+3. Stored config — `<config-dir>/config.toml` (written by `predict-cli wallet …` / `setup`): holds `private_key`, `chain_id`, `scope_id`, `signature_type`, `safe_address`, `network`, `tenant`. The private key lives here at mode 0600 and is **never** read from an env var.
 
-Empty values are treated as unset.
+Empty values are treated as unset. With nothing configured, connection values fall back to the selected network (default `monad`), so most commands work with no flags at all.
 
 ### Signature types
 
@@ -115,17 +118,18 @@ predict-cli auth nonce | grep scopeId
 
 Set it via flag, env var, or `predict-cli wallet create --scope-id 0x…`.
 
-### Networks (`approve check`, `approve set`, `ctf …`)
+### Networks — `--network`
 
-Every command that touches the chain (`predict-cli approve check / set`, `predict-cli ctf redeem / split / merge / collection-id`) runs against a built-in network, selected with `--network <name>` (env `PM_NETWORK`, default `monad`):
+The CLI ships built-in network definitions compiled into the binary; `--network <name>` (env `PM_NETWORK`, default `monad`) selects one. The selected network is the **single source of truth** for the tenant domain + endpoints (clob / gamma / ws / data / relayer), chain id, the CtfExchange the order signer binds to, and every contract address (USDW, CTF, exchanges, fee modules). Read, trade, `approve`, and `ctf` commands therefore all work with no per-command address or endpoint flags:
 
 ```bash
+predict-cli endpoints                  # see exactly what the selected network resolves to
 predict-cli approve check
 predict-cli approve set   --execute
-predict-cli ctf split     --condition-id 0x… --partition 1,2 --amount 1000000 --execute   # amount = raw 6-decimal units (1000000 = 1 USDW)
+predict-cli ctf split     --condition-id 0x… --partition 1,2 --amount 1000000 --execute   # raw 6-decimal units (1000000 = 1 USDW)
 ```
 
-The network registry is the single source of truth for chain id, RPC URL, contract addresses (USDW, CTF, exchanges), and the relayer endpoint — compiled into the binary. Add `--network <name>` to target a non-default network.
+Pin a default with a `network = "<name>"` field in `config.toml`; `--network` overrides it. `--tenant` / `--chain-id` / `--exchange-address` still override individual values from the selected network when needed.
 
 ## Commands
 
@@ -187,24 +191,21 @@ predict-cli auth delete-key <UUID> [--nonce N]
 ### Trading
 
 ```bash
-# Place a limit order (default GTC)
-predict-cli order create --token <T> --side buy --price 0.10 --size 5 \
-                --fee-rate-bps 20 --maker <SAFE>
+# Place a limit order (default GTC). In gnosis-safe mode (default) the maker is your
+# Safe from config (`wallet set-safe`); pass --maker <SAFE> only to override it.
+predict-cli order create --token <T> --side buy --price 0.10 --size 5 --fee-rate-bps 20
 
 # postOnly / GTD
-predict-cli order create --token <T> --side buy --price 0.10 --size 5 \
-                --fee-rate-bps 20 --maker <SAFE> --post-only
-predict-cli order create --token <T> --side buy --price 0.10 --size 5 \
-                --fee-rate-bps 20 --maker <SAFE> \
+predict-cli order create --token <T> --side buy --price 0.10 --size 5 --fee-rate-bps 20 --post-only
+predict-cli order create --token <T> --side buy --price 0.10 --size 5 --fee-rate-bps 20 \
                 --order-type gtd --expiration $(( $(date +%s) + 600 ))
 
 # Market order (BUY only — amount denominated in USDW; server runs the book walk)
-predict-cli order create --token <T> --side buy --amount 3.75 --price 0.75 \
-                --fee-rate-bps 20 --maker <SAFE> --market
+predict-cli order create --token <T> --side buy --amount 3.75 --price 0.75 --fee-rate-bps 20 --market
 
 # Batch place
 predict-cli order post-batch --tokens t1,t2 --prices 0.10,0.05 --sizes 5,5 \
-                    --side buy --fee-rate-bps 20 --maker <SAFE>
+                    --side buy --fee-rate-bps 20
 
 # Manage
 predict-cli order list
@@ -324,17 +325,16 @@ predict-cli approve set --asset usdw --spender 0xd77d550092aB455bd1b9071E4185eCb
 ### Browse markets without a wallet
 
 ```bash
-predict-cli --tenant hermestrade.xyz gamma events list --limit 5
-predict-cli --tenant hermestrade.xyz book 3404...0576
-predict-cli --tenant hermestrade.xyz price-history 3404...0576 --interval 1d
+predict-cli gamma events list --limit 5
+predict-cli book 3404...0576
+predict-cli price-history 3404...0576 --interval 1d
 ```
 
 ### From zero to first order
 
 ```bash
-# 1. Pick wallet + chain config once
-predict-cli wallet create --signature-type gnosis-safe --chain-id 143 \
-                 --scope-id 0x1811a132...196e95
+# 1. Pick wallet + identity once (gnosis-safe is the default; chain / exchange come from the network)
+predict-cli wallet create --scope-id 0x1811a132...196e95
 predict-cli wallet set-safe 0xYOUR_SAFE                  # the Safe controlled by your EOA
 
 # 2. Verify the Safe is funded + check current approval state
@@ -353,16 +353,15 @@ predict-cli approve set --asset usdw \
 # 4. Mint an L2 API key for trading
 predict-cli auth create-key
 
-# 5. Fire your first order
-predict-cli order create --token 3404...0576 --side buy --price 0.10 --size 5 \
-                --fee-rate-bps 20 --maker 0xYOUR_SAFE
+# 5. Fire your first order (maker = your Safe, taken from config)
+predict-cli order create --token 3404...0576 --side buy --price 0.10 --size 5 --fee-rate-bps 20
 ```
 
 ### Place + cancel cycle (no fill)
 
 ```bash
 ID=$(predict-cli order create --token <T> --side buy --price 0.10 --size 5 \
-                     --fee-rate-bps 20 --maker <SAFE> -o json | jq -r .orderID)
+                     --fee-rate-bps 20 -o json | jq -r .orderID)
 predict-cli order get $ID
 predict-cli order cancel $ID
 ```
@@ -372,7 +371,7 @@ predict-cli order cancel $ID
 ```bash
 # Yes book — best ASK 0.09 × 10
 ID=$(predict-cli order create --token <YES_TOKEN> --side buy --price 0.09 --size 5 \
-                     --fee-rate-bps 20 --maker <SAFE> -o json | jq -r .orderID)
+                     --fee-rate-bps 20 -o json | jq -r .orderID)
 # Order will return with status="matched" and a tradeIDs[] populated.
 predict-cli trade
 predict-cli balance --asset-type conditional --token <YES_TOKEN>
@@ -414,8 +413,8 @@ Commands intentionally omitted because the backend doesn't expose the underlying
 ## Output formats
 
 ```bash
-predict-cli --tenant ... -o table  ...       # default — human-readable
-predict-cli --tenant ... -o json   ...       # machine-readable; pipe through jq
+predict-cli -o table <cmd> ...       # default — human-readable
+predict-cli -o json  <cmd> ...       # machine-readable; pipe through jq
 ```
 
 Or set `PM_OUTPUT=json` once and forget about it.
