@@ -14,6 +14,7 @@ mod setup_commands;
 mod shell_commands;
 mod wallet_commands;
 mod ws_commands;
+mod wusd_commands;
 
 use clap::Parser;
 

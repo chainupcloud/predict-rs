@@ -65,6 +65,18 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
         return crate::approve_commands::run(&owned, &sub, fmt).await;
     }
 
+    // `predict-cli deposit` broadcasts a direct EOA tx (wrap) against the network RPC — no CLOB
+    // endpoint required, so dispatch before endpoint resolution.
+    if matches!(args.command, Command::Deposit(_)) {
+        let mut owned = args;
+        let fmt = owned.output;
+        let dargs = match std::mem::replace(&mut owned.command, Command::Ok) {
+            Command::Deposit(d) => d,
+            _ => unreachable!(),
+        };
+        return crate::wusd_commands::run_deposit(&owned, &dargs, fmt).await;
+    }
+
     let endpoints = resolve_endpoints(&args)?;
     let mut builder = Client::builder().endpoints(endpoints);
     if let Some(cid) = effective_chain_id(&args)? {
@@ -227,6 +239,7 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
         Command::Shell => unreachable!("handled by early-return above"),
         Command::Setup => unreachable!("handled by early-return above"),
         Command::Ctf(_) => unreachable!("handled by early-return above"),
+        Command::Deposit(_) => unreachable!("handled by early-return above"),
     }
     Ok(())
 }

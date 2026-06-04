@@ -150,6 +150,8 @@ pub enum Command {
     /// (`condition-id` / `position-id`), RPC-backed `collection-id`, and Safe-mode
     /// on-chain writes (`redeem` / `split` / `merge`) via the relayer.
     Ctf(crate::ctf_commands::CtfArgs),
+    /// Deposit (充值): wrap the EOA's USDC into USDW, minted to your Safe. Direct EOA tx.
+    Deposit(crate::wusd_commands::DepositArgs),
 }
 
 #[derive(Debug, clap::Args)]
