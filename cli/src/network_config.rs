@@ -92,6 +92,11 @@ pub struct ContractsSection {
     /// effective USDC — callers should resolve via [`Self::collateral`].
     #[serde(default)]
     pub usdc: Option<String>,
+    /// Underlying asset the `USDWrapper` wraps into USDW — i.e. what `predict-cli deposit`
+    /// pulls from the EOA. Distinct from [`Self::collateral`] (which is USDW on this platform):
+    /// USDW is the trading collateral; this is the USDC you deposit to mint it.
+    #[serde(default)]
+    pub usdw_underlying: Option<String>,
 }
 
 impl ContractsSection {

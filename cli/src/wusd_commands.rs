@@ -64,10 +64,10 @@ pub async fn run_deposit(args: &Cli, a: &DepositArgs, fmt: Format) -> Result<()>
     let asset_hex = a
         .asset
         .clone()
-        .or_else(|| net.contracts.usdc.clone())
+        .or_else(|| net.contracts.usdw_underlying.clone())
         .ok_or_else(|| {
             anyhow!(
-                "no underlying USDC address: pass --asset <addr> or set contracts.usdc for network '{}'",
+                "no underlying USDC address: pass --asset <addr> or set contracts.usdw_underlying for network '{}'",
                 net.network.name
             )
         })?;
@@ -89,7 +89,7 @@ pub async fn run_deposit(args: &Cli, a: &DepositArgs, fmt: Format) -> Result<()>
     }
 
     let balance = usdc.balanceOf(eoa).call().await.context("read EOA asset balance")?;
-    if balance < amount {
+    if !a.dry_run && balance < amount {
         bail!(
             "EOA {eoa:?} holds {} of {asset:?} but deposit needs {} (base units) — fund the EOA with USDC first",
             balance,
