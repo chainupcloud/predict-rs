@@ -14,7 +14,7 @@ Last updated: 2026-05-28.
 | CLI crate name | upstream V1 CLI crate | `predict-cli` |
 | CLI binary name | upstream CLI binary | `predict-cli` |
 | Repository layout | Two independent git repos | Single Cargo workspace `predict-rs/{clob-client, cli}` |
-| Config directory | upstream config dir (JSON) | `~/.config/pm/config.toml` — see [`docs/wallet.md`](wallet.md). Path overridable via `--config-dir` / `PM_CONFIG_DIR`; file mode 0600, parent dir 0700, atomic-rename writes. |
+| Config directory | upstream config dir (JSON) | `~/.config/predict/config.toml` — see [`docs/wallet.md`](wallet.md). Path overridable via `--config-dir`; file mode 0600, parent dir 0700, atomic-rename writes. |
 
 ---
 
@@ -22,12 +22,12 @@ Last updated: 2026-05-28.
 
 | Dimension | Upstream V1 | predict-rs |
 |-----------|---------------|-------|
-| Default chain | Polygon (chainId 137) | OP Sepolia (chainId 11155420) |
-| Supported chains | Polygon + Amoy (hard-coded `phf::Map`) | **Any configurable EVM** (Monad / OP Sepolia / custom); hard-coding is forbidden |
+| Default chain | Polygon (chainId 137) | Monad (chainId 143) — default `monad` network |
+| Supported chains | Polygon + Amoy (hard-coded `phf::Map`) | Built-in `--network` registry in the CLI (Monad; more addable); the SDK itself stays chain-agnostic |
 | Default REST endpoint | upstream hosted endpoint | `https://clob-api.hermestrade.xyz`; hostnames come from tenant config |
 | Collateral | USDC.e (`0x2791…4174`) | USDC (contract address confirmed on-chain, injected via config) |
 | Gas token | MATIC (Polygon) | Chain-dependent (OP Sepolia: ETH; Monad: MON) |
-| Source of contract addresses | `phf_map!` in `lib.rs` (static table) | Runtime configuration (`Config` / CLI flag / env) — **not in `lib.rs`** |
+| Source of contract addresses | `phf_map!` in `lib.rs` (static table) | CLI's built-in network registry (`cli/src/networks/`) + CLI flags — **never in the SDK's `lib.rs`** |
 
 > **Multi-tenant note:** the platform is a SaaS. Each tenant may have its own subdomain; multiple users under the same tenant share a unified order book via the same `scopeId`. The SDK holds no tenant or hostname state — the endpoint is supplied by the caller.
 

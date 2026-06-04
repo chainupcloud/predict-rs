@@ -50,8 +50,8 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub private_key: Option<String>,
 
-    /// Override the directory holding `config.toml` (default: `dirs::config_dir()/pm`,
-    /// i.e. `~/.config/pm` on Linux). Holds the private key (mode 0600) and is the fallback
+    /// Override the directory holding `config.toml` (default: `dirs::config_dir()/predict`,
+    /// i.e. `~/.config/predict` on Linux). Holds the private key (mode 0600) and is the fallback
     /// source for `--private-key` / `--chain-id` / `--scope-id` / `--network`.
     #[arg(long, global = true, env = "PM_CONFIG_DIR")]
     pub config_dir: Option<String>,

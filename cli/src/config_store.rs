@@ -6,7 +6,7 @@
 //! Resolution for the config directory:
 //!   1. `--config-dir <path>` flag
 //!   2. `PM_CONFIG_DIR` env var
-//!   3. `dirs::config_dir()/pm` (Linux: `~/.config/pm`, macOS: `~/Library/Application Support/pm`)
+//!   3. `dirs::config_dir()/predict` (Linux: `~/.config/predict`, macOS: `~/Library/Application Support/predict`)
 //!
 //! The store is a single TOML file `config.toml` inside that directory. Writes are atomic
 //! (write to a sibling temp file then rename) and the file is created with mode 0600 on
@@ -64,7 +64,7 @@ pub fn config_dir(cli_override: Option<&str>) -> Result<PathBuf> {
     }
     let base = dirs::config_dir()
         .ok_or_else(|| anyhow!("could not determine OS config directory; pass --config-dir"))?;
-    Ok(base.join("pm"))
+    Ok(base.join("predict"))
 }
 
 pub fn config_path(cli_override: Option<&str>) -> Result<PathBuf> {

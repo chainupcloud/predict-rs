@@ -107,13 +107,10 @@ predict-cli ws book --tenant hermestrade.xyz 1234 5678 --level 2 --count 5
 predict-cli ws book-watch --tenant hermestrade.xyz 1234
 
 # JSON-per-line mode for piping to jq.
-predict-cli ws book-watch --tenant hermestrade.xyz 1234 --print-as-json
+predict-cli ws book-watch <TOKEN_ID> --print-as-json
 
 # User channel — auto-derives credentials via /auth/derive-api-key.
 predict-cli ws user \
-  --tenant hermestrade.xyz \
-  --chain-id 11155420 \
-  --private-key 0x<key> \
   --market 0xcondition_a \
   --market 0xcondition_b
 ```

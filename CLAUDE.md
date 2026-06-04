@@ -24,7 +24,7 @@ Telegram chat replies to the user may remain Chinese; this rule applies to repos
 
 The prediction market platform is **multi-tenant SaaS**:
 
-- Each tenant has its own **dedicated domain** (e.g. `clob-api.tenant-a.example.com`), distinguished by the HTTP `Host` header.
+- Each tenant has its own **dedicated domain** (e.g. `clob-api.hermestrade.xyz`), distinguished by the HTTP `Host` header.
 - Multiple tenants may **share a unified order book** (same backend, different `scopeId`).
 - `scopeId` (`bytes32`) is the multi-tenant isolation field embedded in the EIP-712 `ClobAuth` and `Order` structs.
 

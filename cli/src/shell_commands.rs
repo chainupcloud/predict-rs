@@ -105,11 +105,11 @@ fn print_help() {
     println!("  wallet show                        wallet identity");
     println!();
     println!("Built-ins: `help`, `exit` / `quit`, Ctrl-D. `shell` itself is blocked.");
-    println!("Env vars / `predict-cli wallet`-stored config apply on every line; flags supplied here override.");
+    println!("`predict-cli wallet`-stored config applies on every line; flags supplied here override.");
 }
 
 fn history_path() -> Option<std::path::PathBuf> {
-    let dir = dirs::config_dir()?.join("pm");
+    let dir = dirs::config_dir()?.join("predict");
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir.join("history"))
 }
