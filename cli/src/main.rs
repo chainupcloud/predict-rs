@@ -6,6 +6,7 @@ mod ctf_commands;
 mod data_commands;
 mod gamma_commands;
 mod network_config;
+mod networks;
 mod order_commands;
 mod output;
 mod safe_exec;

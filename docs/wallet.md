@@ -54,8 +54,8 @@ $ predict-cli wallet address
 
 ### `predict-cli wallet show`
 
-Prints the address plus where it was loaded from. Reports `cli (--private-key / PM_PRIVATE_KEY)`
-when the key came from the global flag or env (clap merges both), or
+Prints the address plus where it was loaded from. Reports `cli (--private-key)`
+when the key came from the global flag, or
 `config-file <path>` when it was loaded from disk. Reports `none` if nothing is configured.
 
 ```
@@ -83,7 +83,7 @@ The config file is also consulted as a fallback by every command that needs a ke
 
 | Field            | 1st                      | 2nd                | 3rd                   |
 |------------------|--------------------------|--------------------|-----------------------|
-| private key      | `--private-key`          | `PM_PRIVATE_KEY`   | `config.toml`         |
+| private key      | `--private-key`          | `config.toml`      | —                     |
 | chain id         | `--chain-id`             | `PM_CHAIN_ID`      | `config.toml`         |
 | scope id         | `--scope-id`             | `PM_SCOPE_ID`      | `config.toml`         |
 
@@ -94,12 +94,16 @@ wizard that walks through wallet / chain / scope-id selection.
 
 ```toml
 private_key    = "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
+network        = "monad"
+tenant         = "tenant-a.example.com"
 chain_id       = 11155420
 scope_id       = "0x0000000000000000000000000000000000000000000000000000000000000001"
 signature_type = "gnosis-safe"
 ```
 
 All fields are optional; any missing field falls through to the lower-priority sources.
+`network` selects the active built-in network (default `monad`); `tenant` is an
+optional tenant-host override (the network's domain is used when it is absent).
 
 ## Tests
 

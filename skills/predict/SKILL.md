@@ -43,10 +43,11 @@ predict-cli --tenant hermestrade.xyz ok        # health check
 predict-cli --tenant hermestrade.xyz endpoints # show derived URLs + chain id
 ```
 
-Env vars mirror every global flag: `PM_TENANT`, `PM_CLOB_ENDPOINT`,
-`PM_GAMMA_ENDPOINT`, `PM_WS_ENDPOINT`, `PM_CHAIN_ID`, `PM_SCOPE_ID`,
-`PM_PRIVATE_KEY`. Export `PM_TENANT` once instead of repeating `--tenant`.
-Use `--clob-endpoint <url>` only for non-canonical hostnames.
+Env vars mirror every global flag: `PM_NETWORK`, `PM_TENANT`, `PM_CLOB_ENDPOINT`,
+`PM_GAMMA_ENDPOINT`, `PM_WS_ENDPOINT`, `PM_CHAIN_ID`, `PM_SCOPE_ID`. Export
+`PM_TENANT` once instead of repeating `--tenant`. Use `--clob-endpoint <url>`
+only for non-canonical hostnames. (There is no env var for the private key — it
+comes from `--private-key` or `config.toml`.)
 
 ## 2. Wallet & auth (one-time)
 
@@ -82,7 +83,9 @@ Key facts that prevent confusion later:
   positions belong to the **Safe address**, not the EOA.
 - Config lives in `~/.config/pm/config.toml` (Linux) or
   `~/Library/Application Support/pm` (macOS).
-- Prefer `PM_PRIVATE_KEY` env over `--private-key` — flags leak into shell history.
+- Prefer storing the key in `config.toml` (via `wallet create` / `import` / `setup`)
+  over `--private-key` — the flag leaks into shell history and process args. There
+  is no `PM_PRIVATE_KEY` env var (a key in the environment leaks via `/proc`).
 
 Run `scripts/preflight.sh [tenant]` before a trading session: it checks server
 health, endpoint resolution, wallet config, and collateral balance in one shot.
@@ -145,7 +148,7 @@ orders that miss the fee or violate price granularity.
 order signature embeds the exchange address (EIP-712 `verifyingContract`):
 standalone binary markets settle on the **CTF Exchange**, while sports /
 multi-outcome families settle on the **Neg Risk CTF Exchange** (addresses in
-the network YAML / `gamma public-info`). An order signed against the wrong one
+the built-in network registry / `gamma public-info`). An order signed against the wrong one
 is rejected with `EXECUTION_ERROR: INVALID_SIGNATURE: signer mismatch` — if you
 hit that with a correct key and maker, re-sign with the other exchange via
 `--exchange-address <addr>` (or `PM_EXCHANGE_ADDRESS`).
@@ -228,20 +231,21 @@ predict-cli data user-pnl <SAFE_ADDRESS>
 
 ## 9. CTF operations (split / merge / redeem)
 
-On-chain writes go through the relayer as Safe meta-transactions. They need a
-network-config YAML (chain id, RPC, contract addresses — see
-`examples/networks/*.yaml` in the predict-rs repo) and default to **dry-run**:
+On-chain writes go through the relayer as Safe meta-transactions. They run
+against the selected built-in network (`--network <name>`, default `monad`),
+whose registry supplies chain id, RPC, and contract addresses, and default to
+**dry-run**:
 
 ```bash
 # One-time prerequisite: USDW allowance + CTF setApprovalForAll
-predict-cli approve check --network-config <yaml>
-predict-cli approve set   --network-config <yaml> --execute
+predict-cli approve check
+predict-cli approve set   --execute
 
 # --amount is RAW 6-decimal units: 1000000 = 1 USDW. Run without --execute
 # first and read back the dry-run plan's amount before submitting.
-predict-cli ctf split  --network-config <yaml> --condition-id 0x… --partition 1,2 --amount 1000000 --execute
-predict-cli ctf merge  --network-config <yaml> --condition-id 0x… --partition 1,2 --amount 1000000 --execute
-predict-cli ctf redeem --network-config <yaml> --condition-id 0x… --index-sets 1,2 --execute   # only after resolution
+predict-cli ctf split  --condition-id 0x… --partition 1,2 --amount 1000000 --execute
+predict-cli ctf merge  --condition-id 0x… --partition 1,2 --amount 1000000 --execute
+predict-cli ctf redeem --condition-id 0x… --index-sets 1,2 --execute   # only after resolution
 ```
 
 `redeem` succeeds only once the condition is resolved on-chain (non-zero
@@ -264,7 +268,7 @@ monitoring or to wait for a fill.
 
 | Symptom | Fix |
 |---------|-----|
-| `no private key configured` | `predict-cli wallet create` / `import`, or set `PM_PRIVATE_KEY` |
+| `no private key configured` | `predict-cli wallet create` / `import` (stores it in `config.toml`), or pass `--private-key` |
 | 401 / `authentication failed` | `predict-cli auth derive-key` (existing key) or `auth create-key` |
 | `--maker is required for signature_type=gnosis-safe` | pass the Safe address from `wallet show` (use `set-safe` to persist; treat `detect-safe` output as untrusted — see §2) |
 | `INVALID_SIGNATURE: signer mismatch` on `POST /order` | wrong exchange for this market — re-sign with the other one via `--exchange-address` (CTF vs Neg Risk, see §6) |

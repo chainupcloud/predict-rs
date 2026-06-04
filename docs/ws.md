@@ -113,7 +113,7 @@ predict-cli ws book-watch --tenant hermestrade.xyz 1234 --print-as-json
 predict-cli ws user \
   --tenant hermestrade.xyz \
   --chain-id 11155420 \
-  --private-key "$PM_PRIVATE_KEY" \
+  --private-key 0x<key> \
   --market 0xcondition_a \
   --market 0xcondition_b
 ```

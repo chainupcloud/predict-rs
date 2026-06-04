@@ -41,9 +41,9 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
     }
 
     // `predict-cli ctf` — mix of off-chain helpers (`condition-id`, `position-id`) and on-chain
-    // Safe-mode writes (`redeem` / `split` / `merge`). The on-chain variants use the
-    // network YAML supplied via `--network-config` so no CLOB endpoint is needed at the
-    // top level.
+    // Safe-mode writes (`redeem` / `split` / `merge`). The on-chain variants resolve the
+    // selected `--network` (default monad) for contracts + relayer, so no CLOB endpoint is
+    // needed at the top level.
     if matches!(args.command, Command::Ctf(_)) {
         let mut owned = args;
         let fmt = owned.output;
@@ -111,7 +111,7 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
 
     match &args.command {
         Command::Endpoints => {
-            print_endpoints(&client, fmt)?;
+            print_endpoints(&args, &client, fmt)?;
         }
         Command::Ok => {
             let body = client.ok().await?;
@@ -295,7 +295,7 @@ pub(crate) fn signer_from_args(args: &Cli) -> anyhow::Result<PMCup26Signer> {
         &pk_owned
     } else {
         return Err(anyhow!(
-            "private key required for L1 auth: pass --private-key, set PM_PRIVATE_KEY, or run `predict-cli wallet create`"
+            "private key required: pass --private-key or store one with `predict-cli wallet create` / `wallet import` / `setup` (the PM_PRIVATE_KEY env var is intentionally not supported)"
         ));
     };
 
@@ -309,15 +309,23 @@ pub(crate) fn signer_from_args(args: &Cli) -> anyhow::Result<PMCup26Signer> {
             .with_context(|| format!("invalid scope id '{scope_hex}'"))?;
         signer = signer.with_scope_id(scope);
     }
-    if let Some(addr_hex) = &args.exchange_address {
-        let addr = parse_address(addr_hex)
-            .with_context(|| format!("invalid --exchange-address '{addr_hex}'"))?;
-        signer = signer.with_exchange(addr);
-    }
+    // Exchange (EIP-712 Order `verifyingContract`): explicit flag wins, else the selected
+    // network's `ctf_exchange`. Always set it so order signing works without a per-command flag.
+    let exchange_hex = match &args.exchange_address {
+        Some(h) => h.clone(),
+        None => {
+            crate::networks::get(&crate::networks::effective_network_name(args, stored.as_ref()))?
+                .contracts
+                .ctf_exchange
+        }
+    };
+    let exchange = parse_address(&exchange_hex)
+        .with_context(|| format!("invalid exchange address '{exchange_hex}'"))?;
+    signer = signer.with_exchange(exchange);
     Ok(signer)
 }
 
-fn effective_chain_id(args: &Cli) -> anyhow::Result<Option<u64>> {
+pub(crate) fn effective_chain_id(args: &Cli) -> anyhow::Result<Option<u64>> {
     let stored = crate::config_store::load(args.config_dir.as_deref())?;
     effective_chain_id_with(args, stored.as_ref())
 }
@@ -350,7 +358,12 @@ fn effective_chain_id_with(
     args: &Cli,
     stored: Option<&crate::config_store::StoredConfig>,
 ) -> anyhow::Result<Option<u64>> {
-    Ok(args.chain_id.or_else(|| stored.and_then(|c| c.chain_id)))
+    if let Some(c) = args.chain_id.or_else(|| stored.and_then(|c| c.chain_id)) {
+        return Ok(Some(c));
+    }
+    // Fall back to the selected network's chain id so signing works without `--chain-id`.
+    let net = crate::networks::get(&crate::networks::effective_network_name(args, stored))?;
+    Ok(Some(net.network.chain_id))
 }
 
 fn effective_scope_id(args: &Cli, stored: Option<&crate::config_store::StoredConfig>) -> String {
@@ -365,7 +378,7 @@ fn effective_scope_id(args: &Cli, stored: Option<&crate::config_store::StoredCon
 fn build_l1_client(args: &Cli) -> anyhow::Result<Client> {
     let endpoints = resolve_endpoints(args)?;
     let mut b = Client::builder().endpoints(endpoints);
-    if let Some(cid) = args.chain_id {
+    if let Some(cid) = effective_chain_id(args)? {
         b = b.chain_id(cid);
     }
     b.build().context("build client")
@@ -374,7 +387,7 @@ fn build_l1_client(args: &Cli) -> anyhow::Result<Client> {
 fn build_l2_client(args: &Cli, creds: Credentials, signer: &PMCup26Signer) -> anyhow::Result<Client> {
     let endpoints = resolve_endpoints(args)?;
     let mut b: ClientBuilder = Client::builder().endpoints(endpoints);
-    if let Some(cid) = args.chain_id {
+    if let Some(cid) = effective_chain_id(args)? {
         b = b.chain_id(cid);
     }
     Ok(b.credentials(creds).signer_address(signer.address()).build()?)
@@ -521,34 +534,42 @@ pub fn resolve_endpoints_pub(args: &Cli) -> anyhow::Result<Endpoints> {
 }
 
 fn resolve_endpoints(args: &Cli) -> anyhow::Result<Endpoints> {
-    match (&args.tenant, &args.clob_endpoint) {
-        (Some(host), _) => {
-            let mut ep = Endpoints::from_tenant(host)
-                .with_context(|| format!("derive endpoints from tenant {host}"))?;
-            if let Some(g) = &args.gamma_endpoint {
-                ep = ep.with_gamma(parse_endpoint(g)?);
-            }
-            if let Some(w) = &args.ws_endpoint {
-                ep = ep.with_ws(parse_endpoint(w)?);
-            }
-            Ok(ep)
-        }
-        (None, Some(clob)) => {
-            let mut ep = Endpoints::clob_only(clob)
-                .with_context(|| format!("parse clob endpoint {clob}"))?;
-            if let Some(g) = &args.gamma_endpoint {
-                ep = ep.with_gamma(parse_endpoint(g)?);
-            }
-            if let Some(w) = &args.ws_endpoint {
-                ep = ep.with_ws(parse_endpoint(w)?);
-            }
-            Ok(ep)
-        }
-        (None, None) => Err(anyhow!(
-            "no endpoints configured: pass --tenant <host> or --clob-endpoint <url> \
-             (or set PM_TENANT / PM_CLOB_ENDPOINT env vars)"
-        )),
+    // An explicit `--clob-endpoint` always wins (advanced override against a single host).
+    let mut ep = if let Some(clob) = &args.clob_endpoint {
+        Endpoints::clob_only(clob).with_context(|| format!("parse clob endpoint {clob}"))?
+    } else {
+        // Otherwise derive every endpoint from the effective tenant host. For the selected
+        // network's own domain this yields the same clob / gamma / ws / data hosts the network
+        // declares (canonical `clob-api.<host>` etc.).
+        let host = effective_tenant(args)?;
+        Endpoints::from_tenant(&host)
+            .with_context(|| format!("derive endpoints from tenant {host}"))?
+    };
+    if let Some(g) = &args.gamma_endpoint {
+        ep = ep.with_gamma(parse_endpoint(g)?);
     }
+    if let Some(w) = &args.ws_endpoint {
+        ep = ep.with_ws(parse_endpoint(w)?);
+    }
+    Ok(ep)
+}
+
+/// Resolve the tenant host for endpoint derivation. Order: `--tenant` flag / env >
+/// `config.toml` `tenant` > the selected network's domain (e.g. `hermestrade.xyz` for `monad`).
+fn effective_tenant(args: &Cli) -> anyhow::Result<String> {
+    if let Some(t) = args.tenant.clone().filter(|s| !s.is_empty()) {
+        return Ok(t);
+    }
+    let stored = crate::config_store::load(args.config_dir.as_deref())?;
+    if let Some(t) = stored
+        .as_ref()
+        .and_then(|c| c.tenant.clone())
+        .filter(|s| !s.is_empty())
+    {
+        return Ok(t);
+    }
+    let net = crate::networks::get(&crate::networks::effective_network_name(args, stored.as_ref()))?;
+    Ok(net.tenant.domain)
 }
 
 fn parse_endpoint(s: &str) -> anyhow::Result<Url> {
@@ -642,19 +663,32 @@ fn print_book(book: &OrderBookSummary, fmt: Format) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn print_endpoints(client: &Client, fmt: Format) -> anyhow::Result<()> {
+fn print_endpoints(args: &Cli, client: &Client, fmt: Format) -> anyhow::Result<()> {
     let clob = client.clob_url().as_str().to_owned();
     let gamma = client.gamma_url().map(|u| u.as_str().to_owned());
     let ws = client.ws_url().map(|u| u.as_str().to_owned());
     let chain_id = client.chain_id();
+    // Surface the resolved network selection + exchange so a user can eyeball, before placing an
+    // order, exactly which network / chain / `verifyingContract` the order signer will bind to.
+    let stored = crate::config_store::load(args.config_dir.as_deref())?;
+    let network = crate::networks::effective_network_name(args, stored.as_ref());
+    let exchange = crate::networks::get(&network)
+        .ok()
+        .map(|n| n.contracts.ctf_exchange);
+    let tenant = effective_tenant(args).ok();
     match fmt {
         Format::Json => output::print_json(&serde_json::json!({
+            "network": network,
+            "tenant": tenant,
             "clob": clob,
             "gamma": gamma,
             "ws": ws,
             "chain_id": chain_id,
+            "exchange": exchange,
         }))?,
         Format::Table => {
+            println!("network : {network}");
+            println!("tenant  : {}", tenant.as_deref().unwrap_or("(unset)"));
             println!("clob    : {clob}");
             println!("gamma   : {}", gamma.as_deref().unwrap_or("(unset)"));
             println!("ws      : {}", ws.as_deref().unwrap_or("(unset)"));
@@ -662,6 +696,7 @@ fn print_endpoints(client: &Client, fmt: Format) -> anyhow::Result<()> {
                 "chain_id: {}",
                 chain_id.map(|c| c.to_string()).unwrap_or_else(|| "(unset)".into())
             );
+            println!("exchange: {}", exchange.as_deref().unwrap_or("(unset)"));
         }
     }
     Ok(())

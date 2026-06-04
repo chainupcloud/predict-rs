@@ -392,7 +392,9 @@ async fn run_create(args: &Cli, a: &CreateArgs, fmt: Format) -> anyhow::Result<(
         // Defensive: signer derivation should always yield a non-zero address.
         return Err(anyhow!("signer derived a zero address"));
     }
-    let (signable, signed) = build_signed_order(&signer, a, signature_type)?;
+    let stored_safe =
+        crate::config_store::load(args.config_dir.as_deref())?.and_then(|c| c.safe_address);
+    let (signable, signed) = build_signed_order(&signer, a, signature_type, stored_safe.as_deref())?;
     if a.dry_run {
         // Print the full SendOrder envelope shape — what the CLI would POST.
         let envelope = SendOrderRequest {
@@ -454,6 +456,8 @@ async fn run_post_batch(args: &Cli, a: &PostBatchArgs, fmt: Format) -> anyhow::R
 
     let signer = signer_from_args(args)?;
     let signature_type = crate::commands::effective_signature_type(args)?;
+    let stored_safe =
+        crate::config_store::load(args.config_dir.as_deref())?.and_then(|c| c.safe_address);
     let mut signables: Vec<SignableOrder> = Vec::with_capacity(tokens.len());
     let mut signed: Vec<SignedOrder> = Vec::with_capacity(tokens.len());
     for ((token, price), size) in tokens.iter().zip(&prices).zip(&sizes) {
@@ -476,7 +480,7 @@ async fn run_post_batch(args: &Cli, a: &PostBatchArgs, fmt: Format) -> anyhow::R
             salt: None,
             dry_run: false,
         };
-        let (sg, so) = build_signed_order(&signer, &create, signature_type)?;
+        let (sg, so) = build_signed_order(&signer, &create, signature_type, stored_safe.as_deref())?;
         signables.push(sg);
         signed.push(so);
     }
@@ -637,6 +641,7 @@ fn build_signed_order(
     signer: &PMCup26Signer,
     a: &CreateArgs,
     signature_type: SignatureType,
+    maker_fallback: Option<&str>,
 ) -> anyhow::Result<(SignableOrder, SignedOrder)> {
     let token_id = U256::from_str(&a.token)
         .with_context(|| format!("invalid --token (must be uint256 decimal): {}", a.token))?;
@@ -645,10 +650,19 @@ fn build_signed_order(
     let maker = match &a.maker {
         Some(s) => parse_address(s).with_context(|| format!("invalid --maker {s}"))?,
         None if signature_type == SignatureType::PolyGnosisSafe => {
-            return Err(anyhow!(
-                "--maker is required for signature_type=gnosis-safe (default). \
-                 Pass --maker <Safe address> or --signature-type eoa."
-            ));
+            // Fall back to the Safe stored in config.toml (set via `wallet set-safe` /
+            // `wallet detect-safe` / `setup`), mirroring how chain id and exchange resolve.
+            match maker_fallback {
+                Some(s) => parse_address(s)
+                    .with_context(|| format!("invalid stored safe_address {s}"))?,
+                None => {
+                    return Err(anyhow!(
+                        "no maker for signature_type=gnosis-safe (default): pass --maker <Safe address>, \
+                         store one with `predict-cli wallet set-safe <addr>` / `wallet detect-safe`, \
+                         or use --signature-type eoa."
+                    ));
+                }
+            }
         }
         None => signer.address(),
     };

@@ -317,15 +317,16 @@ fn normalize_hex(s: &str) -> String {
     format!("0x{}", stripped.to_ascii_lowercase())
 }
 
-/// Resolution order: `--private-key` / `PM_PRIVATE_KEY` (clap merges them) → config file.
+/// Resolution order: `--private-key` flag → `config.toml`. The key is never read from an
+/// environment variable.
 /// Returns the hex string and a human-readable source label.
 pub(crate) fn resolve_private_key(args: &Cli) -> Result<(String, String)> {
     if let Some(pk) = args.private_key.as_deref() {
-        return Ok((pk.to_owned(), "cli (--private-key / PM_PRIVATE_KEY)".into()));
+        return Ok((pk.to_owned(), "cli (--private-key)".into()));
     }
     let path = config_store::config_path(args.config_dir.as_deref())?;
     let cfg = config_store::load(args.config_dir.as_deref())?
-        .ok_or_else(|| anyhow!("no private key configured: pass --private-key, set PM_PRIVATE_KEY, or run `predict-cli wallet create`"))?;
+        .ok_or_else(|| anyhow!("no private key configured: pass --private-key or run `predict-cli wallet create` / `wallet import`"))?;
     let pk = cfg.private_key.ok_or_else(|| {
         anyhow!(
             "config file {} has no `private_key` entry; run `predict-cli wallet create` or `predict-cli wallet import`",
