@@ -345,8 +345,7 @@ mod tests {
 
     #[test]
     fn build_endpoints_pulls_relayer_from_yaml_not_canonical_subdomain() {
-        let cfg = crate::network_config::load("../examples/networks/monad-hermestrade.yaml")
-            .expect("load monad yaml");
+        let cfg = crate::networks::get("monad").expect("load monad network");
         let ep = build_endpoints(&cfg).unwrap();
         assert_eq!(
             ep.relayer.as_ref().unwrap().as_str(),

@@ -41,6 +41,16 @@ pub struct StoredConfig {
     /// `predict-cli wallet set-safe <addr>` (manual) or `predict-cli wallet detect-safe` (one server call).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub safe_address: Option<String>,
+    /// Active built-in network name (see [`crate::networks`]). Selects chain id, endpoints, and
+    /// contract addresses. Overridden by `--network`; defaults to [`crate::networks::DEFAULT_NETWORK`]
+    /// when unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network: Option<String>,
+    /// Tenant root host override. Most deployments leave this unset and inherit the selected
+    /// network's domain; set it for the same-network / different-tenant case. Overridden by
+    /// `--tenant`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tenant: Option<String>,
 }
 
 /// Resolve the directory holding `config.toml`, honoring `--config-dir` then `PM_CONFIG_DIR`
@@ -179,6 +189,8 @@ mod tests {
             scope_id: Some("0x0000000000000000000000000000000000000000000000000000000000000001".into()),
             signature_type: Some("gnosis-safe".into()),
             safe_address: Some("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef".into()),
+            network: Some("monad".into()),
+            tenant: Some("hermestrade.xyz".into()),
         };
         let path = save(Some(&dir), &cfg).unwrap();
         assert!(path.exists());

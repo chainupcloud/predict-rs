@@ -76,7 +76,7 @@ and `{27, 28}`; we standardise on `{27, 28}` for end-to-end parity.
 
 The platform settles standalone binary markets on the **CTF Exchange** and
 sports / multi-outcome families on the **Neg Risk CTF Exchange** (addresses in
-the network YAML and `gamma public-info`). The order signature embeds the
+the CLI's built-in network registry and `gamma public-info`). The order signature embeds the
 exchange address as the EIP-712 `verifyingContract`, so an order signed against
 the wrong exchange fails at POST with
 `EXECUTION_ERROR: INVALID_SIGNATURE: signer mismatch`. Gamma does not currently
@@ -149,7 +149,7 @@ println!("orderID={} status={}", resp.order_id, resp.status);
 # Place a limit BUY for 100 @ 0.34, scope 0x42 on OP Sepolia.
 predict-cli --tenant hermestrade.xyz \
    --chain-id 11155420 --scope-id 0x42 \
-   --private-key "$PM_PRIVATE_KEY" \
+   --private-key 0x<key> \
    --exchange-address 0xC6e9... \
    order create \
    --token 100 --side buy --price 0.34 --size 100 \

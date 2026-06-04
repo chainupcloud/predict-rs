@@ -22,7 +22,7 @@ use clap::{Args, Subcommand};
 use predict_rs_clob_client::safe::SafeTransaction;
 
 use crate::cli::Cli;
-use crate::network_config::{self, NetworkConfig};
+use crate::network_config::NetworkConfig;
 use crate::output::{self, Format};
 use crate::safe_exec::{self, SafeContext};
 
@@ -85,10 +85,6 @@ pub struct PositionIdArgs {
 
 #[derive(Debug, Args)]
 pub struct CollectionIdArgs {
-    /// Path to the tenant network YAML — supplies `network.rpc_url` and
-    /// `contracts.conditional_tokens` defaults.
-    #[arg(long)]
-    pub network_config: String,
     /// Parent collection id (`bytes32`). Default zero = top-level condition.
     #[arg(long, default_value = "0x0000000000000000000000000000000000000000000000000000000000000000")]
     pub parent_collection_id: String,
@@ -110,9 +106,6 @@ pub struct CollectionIdArgs {
 /// per-command arg structs stay short.
 #[derive(Debug, Args)]
 pub struct CtfWriteCommon {
-    /// Path to the tenant network YAML.
-    #[arg(long)]
-    pub network_config: String,
     /// Condition id, `0x...32bytes`. Output of `CTF.getConditionId` or `predict-cli ctf condition-id`.
     #[arg(long)]
     pub condition_id: String,
@@ -195,7 +188,7 @@ pub async fn run(args: &Cli, ctf_args: CtfArgs, fmt: Format) -> Result<()> {
             let id = position_id(&a.collateral, &a.collection)?;
             output::print_scalar("position_id", format!("0x{}", hex::encode(id)), fmt)
         }
-        CtfCmd::CollectionId(a) => run_collection_id(&a, fmt).await,
+        CtfCmd::CollectionId(a) => run_collection_id(args, &a, fmt).await,
         CtfCmd::Redeem(a) => run_redeem(args, &a, fmt).await,
         CtfCmd::Split(a) => run_split(args, &a, fmt).await,
         CtfCmd::Merge(a) => run_merge(args, &a, fmt).await,
@@ -401,7 +394,7 @@ fn resolve_collateral(cfg: &NetworkConfig, override_addr: Option<&str>) -> Resul
 }
 
 async fn run_redeem(args: &Cli, a: &RedeemArgs, fmt: Format) -> Result<()> {
-    let cfg = network_config::load(&a.common.network_config)?;
+    let cfg = crate::networks::effective_network(args)?;
     let ctx = SafeContext::resolve(args, cfg, a.common.rpc_url.as_deref())?;
 
     let condition_id_bytes = parse_bytes32(&a.common.condition_id)
@@ -510,7 +503,7 @@ async fn run_split_or_merge(
     kind: SplitOrMerge,
     fmt: Format,
 ) -> Result<()> {
-    let cfg = network_config::load(&common.network_config)?;
+    let cfg = crate::networks::effective_network(args)?;
     let ctx = SafeContext::resolve(args, cfg, common.rpc_url.as_deref())?;
 
     let condition_id_bytes = parse_bytes32(&common.condition_id)
@@ -574,8 +567,8 @@ sol! {
     }
 }
 
-async fn run_collection_id(a: &CollectionIdArgs, fmt: Format) -> Result<()> {
-    let cfg = network_config::load(&a.network_config)?;
+async fn run_collection_id(args: &Cli, a: &CollectionIdArgs, fmt: Format) -> Result<()> {
+    let cfg = crate::networks::effective_network(args)?;
     let parent = parse_bytes32(&a.parent_collection_id).context("invalid --parent-collection-id")?;
     let condition = parse_bytes32(&a.condition_id).context("invalid --condition-id")?;
     let index_set = parse_amount_u256(&a.index_set).context("invalid --index-set")?;

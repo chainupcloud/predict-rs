@@ -52,7 +52,7 @@ cargo build
 ./target/debug/predict-cli --tenant hermestrade.xyz -o json time
 ```
 
-Env vars `PM_TENANT`, `PM_CLOB_ENDPOINT`, `PM_GAMMA_ENDPOINT`, `PM_WS_ENDPOINT`, `PM_CHAIN_ID`, `PM_SCOPE_ID` mirror the flags.
+Env vars `PM_NETWORK`, `PM_TENANT`, `PM_CLOB_ENDPOINT`, `PM_GAMMA_ENDPOINT`, `PM_WS_ENDPOINT`, `PM_CHAIN_ID`, `PM_SCOPE_ID` mirror the flags.
 
 ### SDK usage
 
@@ -79,7 +79,7 @@ let client = Client::builder()
     .build()?;
 ```
 
-Reference network configs (NOT hard-coded in the SDK — caller supplies them at runtime) live under [`examples/networks/`](examples/networks/).
+Networks are built into the CLI (chain id, RPC, tenant domain + endpoints, contract addresses) and selected with `--network <name>` (env `PM_NETWORK`, default `monad`). The SDK itself stays network-agnostic — the caller supplies contract addresses / endpoints at runtime.
 
 ## Why a platform-specific fork?
 
@@ -101,7 +101,6 @@ predict-rs/
 ├── README.md               # this file
 ├── CLAUDE.md
 ├── docs/                   # auth-flow / orders / ws / gamma / wallet / diff-vs-upstream-v1
-├── examples/networks/      # reference network YAMLs (Monad / OP Sepolia / …)
 ├── clob-client/            # SDK crate (predict-rs-clob-client) — see clob-client/README.md
 └── cli/                    # CLI crate (binary: predict-cli) — see cli/README.md
 ```

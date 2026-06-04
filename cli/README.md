@@ -83,10 +83,10 @@ The first run prompts auto-pick a sensible config dir (`~/.config/pm` on Linux, 
 
 ### Resolution order
 
-Every connection flag (`--tenant`, `--clob-endpoint`, `--chain-id`, `--scope-id`, `--private-key`, …) resolves in this order:
+Every connection flag (`--network`, `--tenant`, `--clob-endpoint`, `--chain-id`, `--scope-id`, `--private-key`, …) resolves in this order:
 
 1. CLI flag — wins.
-2. Env var — `PM_TENANT`, `PM_CLOB_ENDPOINT`, `PM_CHAIN_ID`, `PM_SCOPE_ID`, `PM_PRIVATE_KEY`, `PM_SIGNATURE_TYPE`, `PM_EXCHANGE_ADDRESS`, `PM_CONFIG_DIR`, `PM_CREDENTIALS_FILE`, `PM_OUTPUT`.
+2. Env var — `PM_NETWORK`, `PM_TENANT`, `PM_CLOB_ENDPOINT`, `PM_CHAIN_ID`, `PM_SCOPE_ID`, `PM_SIGNATURE_TYPE`, `PM_EXCHANGE_ADDRESS`, `PM_CONFIG_DIR`, `PM_CREDENTIALS_FILE`, `PM_OUTPUT`. (The private key has no env var — supply it via `--private-key` or `config.toml`.)
 3. Stored config — `<config-dir>/config.toml` (written by `predict-cli wallet …`).
 
 Empty values are treated as unset.
@@ -115,17 +115,17 @@ predict-cli auth nonce | grep scopeId
 
 Set it via flag, env var, or `predict-cli wallet create --scope-id 0x…`.
 
-### Network config (`approve check`, `approve set`, `ctf …`)
+### Networks (`approve check`, `approve set`, `ctf …`)
 
-Every command that touches the chain (`predict-cli approve check / set`, `predict-cli ctf redeem / split / merge / collection-id`) needs a tenant network YAML. One ships at [`examples/networks/monad-hermestrade.yaml`](../examples/networks/monad-hermestrade.yaml):
+Every command that touches the chain (`predict-cli approve check / set`, `predict-cli ctf redeem / split / merge / collection-id`) runs against a built-in network, selected with `--network <name>` (env `PM_NETWORK`, default `monad`):
 
 ```bash
-predict-cli approve check --network-config examples/networks/monad-hermestrade.yaml
-predict-cli approve set   --network-config examples/networks/monad-hermestrade.yaml --execute
-predict-cli ctf split     --network-config examples/networks/monad-hermestrade.yaml --condition-id 0x… --partition 1,2 --amount 1000000 --execute   # amount = raw 6-decimal units (1000000 = 1 USDW)
+predict-cli approve check
+predict-cli approve set   --execute
+predict-cli ctf split     --condition-id 0x… --partition 1,2 --amount 1000000 --execute   # amount = raw 6-decimal units (1000000 = 1 USDW)
 ```
 
-The YAML is the single source of truth for chain id, RPC URL, contract addresses (USDW, CTF, exchanges), and the relayer endpoint. It's the same shape the backend deploy tooling uses.
+The network registry is the single source of truth for chain id, RPC URL, contract addresses (USDW, CTF, exchanges), and the relayer endpoint — compiled into the binary. Add `--network <name>` to target a non-default network.
 
 ## Commands
 
@@ -244,17 +244,17 @@ predict-cli heartbeat                                  # server-side liveness pi
 ### Approval helpers
 
 ```bash
-# Read-only — query allowance / setApprovalForAll status for every YAML target.
-predict-cli approve check --network-config examples/networks/monad-hermestrade.yaml
+# Read-only — query allowance / setApprovalForAll status for every network target.
+predict-cli approve check
 
 # Write — issue approvals via Safe meta-tx through the relayer.
 # Defaults to dry-run (signs locally + prints the SubmitRequest, never POSTs).
-predict-cli approve set --network-config examples/networks/monad-hermestrade.yaml
+predict-cli approve set
 
 # Default `--asset all` batches USDW.approve(target, MAX) +
 # CTF.setApprovalForAll(target, true) for every approval target into one
 # MultiSend. This is what a fresh community wallet needs.
-predict-cli approve set --network-config examples/networks/monad-hermestrade.yaml --execute
+predict-cli approve set --execute
 
 # Narrow the batch:
 predict-cli approve set --asset usdw --execute              # USDW.approve only
@@ -270,7 +270,7 @@ Gas is paid by the relayer's key pool; the user spends **zero collateral**. Poll
 Every `predict-cli` write command runs through the same flow — the only difference between `approve set` and `ctf {redeem,split,merge}` is the encoded calldata:
 
 1. **JWT login** — `Client::jwt_login` hits gamma-service `/auth/nonce` → signs an EIP-712 `LoginMessage` → `POST /auth/login` → returns a Bearer JWT.
-2. **Safe nonce** — read `Safe.nonce()` from the YAML's `network.rpc_url`.
+2. **Safe nonce** — read `Safe.nonce()` from the selected network's RPC URL (overridable with `--rpc-url`).
 3. **Build SafeTx** — either a single `Call` (one op) or `DelegateCall` to MultiSend (N ops).
 4. **Sign** — `PMCup26Signer::sign_safe_tx` produces 65 bytes with Ethereum `v` in {0x1b, 0x1c}.
 5. **Submit** — `POST relayer /submit` with the signed `SubmitRequest`. Returns a `transactionID` immediately; the relayer broadcasts asynchronously.
@@ -301,13 +301,12 @@ predict-cli ctf position-id  --collateral 0xUSDW --collection 0x…
 
 # RPC fallback — calls CTF.getCollectionId(parent, condition, indexSet) on-chain
 # (the local formula needs alt_bn128 EC point addition, which we defer to the chain).
-predict-cli ctf collection-id --network-config examples/networks/monad-hermestrade.yaml \
-        --condition-id 0x… --index-set 1
+predict-cli ctf collection-id --condition-id 0x… --index-set 1
 
 # Safe-mode writes — same path-B flow as `predict-cli approve set`. Default dry-run; --execute submits.
-predict-cli ctf redeem --network-config <yaml> --condition-id 0x… --index-sets 1
-predict-cli ctf split  --network-config <yaml> --condition-id 0x… --partition 1,2 --amount 1000000   # raw 6-decimal units
-predict-cli ctf merge  --network-config <yaml> --condition-id 0x… --partition 1,2 --amount 1000000   # raw 6-decimal units
+predict-cli ctf redeem --condition-id 0x… --index-sets 1
+predict-cli ctf split  --condition-id 0x… --partition 1,2 --amount 1000000   # raw 6-decimal units
+predict-cli ctf merge  --condition-id 0x… --partition 1,2 --amount 1000000   # raw 6-decimal units
 ```
 
 Amounts are in raw smallest units (USDW has 6 decimals, so 1 USDW = `1_000_000`). For `split` / `merge`, ensure the Safe holds enough collateral (split) or a full outcome-token set (merge); `redeem` only succeeds after the condition is reported on-chain.
@@ -318,7 +317,7 @@ Amounts are in raw smallest units (USDW has 6 decimals, so 1 USDW = `1_000_000`)
 predict-cli approve set --asset usdw --spender 0xd77d550092aB455bd1b9071E4185eCbB6E8d6a2A --execute
 ```
 
-(Address shown is the Monad ConditionalTokens contract; check your YAML's `contracts.conditional_tokens` value.)
+(Address shown is the Monad ConditionalTokens contract, built into the `monad` network.)
 
 ## Common workflows
 
@@ -340,16 +339,16 @@ predict-cli wallet set-safe 0xYOUR_SAFE                  # the Safe controlled b
 
 # 2. Verify the Safe is funded + check current approval state
 predict-cli balance --asset-type collateral
-predict-cli approve check --network-config examples/networks/monad-hermestrade.yaml
+predict-cli approve check
 
 # 3. If approvals are missing, batch USDW.approve + CTF.setApprovalForAll in
 #    ONE Safe meta-tx via the relayer (relayer pays gas, you pay 0 USDW).
-predict-cli approve set --network-config examples/networks/monad-hermestrade.yaml --execute
+predict-cli approve set --execute
 
 # (Optional) If you plan to use `predict-cli ctf split/merge`, also approve the
 # ConditionalTokens contract as a USDW spender:
-predict-cli approve set --network-config examples/networks/monad-hermestrade.yaml \
-               --asset usdw --spender 0xd77d550092aB455bd1b9071E4185eCbB6E8d6a2A --execute
+predict-cli approve set --asset usdw \
+               --spender 0xd77d550092aB455bd1b9071E4185eCbB6E8d6a2A --execute
 
 # 4. Mint an L2 API key for trading
 predict-cli auth create-key

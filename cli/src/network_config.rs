@@ -1,16 +1,12 @@
-//! Tenant network configuration loaded from YAML.
+//! Tenant network configuration schema (decoded from YAML).
 //!
-//! Mirrors the schema of `examples/networks/monad-hermestrade.yaml`. Used by `predict-cli approve`
-//! (and later `predict-cli setup`) to find the chain id, RPC endpoint, USDC / CTF / Exchange / Safe
-//! contract addresses, and the spender / operator targets a user wallet must authorise to
-//! trade.
+//! Defines the `chain id`, RPC endpoint, USDC / CTF / Exchange / Safe contract addresses, and the
+//! spender / operator targets a user wallet must authorise to trade. Each built-in network ships
+//! one such YAML document under `cli/src/networks/`, baked into the binary and decoded by
+//! [`crate::networks`]; this module is just the schema + [`parse`].
 //!
-//! Per `predict-rs/CLAUDE.md`: no contract address may live in SDK source. This loader keeps
-//! tenant-specific addresses caller-supplied — the CLI loads `--network-config <path>`,
-//! the SDK reads only what the caller passes in.
-
-use std::fs;
-use std::path::Path;
+//! Per `predict-rs/CLAUDE.md`: no contract address lives in SDK source. These addresses live in
+//! the CLI's built-in registry, selected via `--network`; the SDK reads only what the caller passes in.
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -152,12 +148,10 @@ pub struct ApprovalTarget {
     pub address: String,
 }
 
-pub fn load(path: impl AsRef<Path>) -> Result<NetworkConfig> {
-    let path = path.as_ref();
-    let raw = fs::read_to_string(path)
-        .with_context(|| format!("read network config {}", path.display()))?;
-    serde_yaml::from_str::<NetworkConfig>(&raw)
-        .with_context(|| format!("decode network config {}", path.display()))
+/// Decode a network config from a YAML string. Used by the built-in [`crate::networks`] registry,
+/// which holds each network's YAML baked into the binary via `include_str!`.
+pub fn parse(raw: &str) -> Result<NetworkConfig> {
+    serde_yaml::from_str::<NetworkConfig>(raw).context("decode network config")
 }
 
 #[cfg(test)]
@@ -166,7 +160,7 @@ mod tests {
 
     #[test]
     fn parses_monad_hermestrade_example() {
-        let cfg = load("../examples/networks/monad-hermestrade.yaml").expect("load yaml");
+        let cfg = parse(include_str!("networks/monad.yaml")).expect("parse yaml");
         assert_eq!(cfg.network.name, "monad");
         assert_eq!(cfg.network.chain_id, 143);
         assert_eq!(cfg.network.rpc_url, "https://rpc.monad.xyz");

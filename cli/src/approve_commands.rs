@@ -24,7 +24,7 @@ use predict_rs_clob_client::safe::multisend::SafeSubOp;
 use predict_rs_clob_client::safe::{self, SafeTransaction};
 
 use crate::cli::Cli;
-use crate::network_config::{self, ApprovalTarget, NetworkConfig};
+use crate::network_config::{ApprovalTarget, NetworkConfig};
 use crate::output::{self, Format};
 use crate::safe_exec::{self, SafeContext};
 
@@ -55,9 +55,6 @@ pub enum ApproveCommand {
 
 #[derive(Debug, Args)]
 pub struct CheckArgs {
-    /// Path to the tenant network YAML. Schema matches `examples/networks/*.yaml`.
-    #[arg(long)]
-    pub network_config: String,
     /// Owner address to check. Defaults to the EOA from the configured wallet.
     /// **For Safe-wallet users (`signatureType=2`, default) you must pass the Safe
     /// address explicitly here** — the EOA holds no funds and its allowance is always zero.
@@ -81,9 +78,6 @@ pub enum AssetSet {
 
 #[derive(Debug, Args)]
 pub struct SetArgs {
-    /// Path to the tenant network YAML. Schema matches `examples/networks/*.yaml`.
-    #[arg(long)]
-    pub network_config: String,
     /// Which approvals to issue. `all` (default) = USDW.approve(target, MAX) +
     /// CTF.setApprovalForAll(target, true) for every approval target — what a
     /// fresh wallet needs to actually place orders. `usdw` / `ctf` limit the
@@ -128,14 +122,14 @@ pub async fn run(args: &Cli, sub: &ApproveCommand, fmt: Format) -> Result<()> {
 }
 
 async fn run_check(args: &Cli, a: &CheckArgs, fmt: Format) -> Result<()> {
-    let cfg = network_config::load(&a.network_config)?;
+    let cfg = crate::networks::effective_network(args)?;
     let owner = resolve_owner(args, a.address.as_deref())?;
     let rpc_url = a.rpc_url.clone().unwrap_or_else(|| cfg.network.rpc_url.clone());
 
     let collateral = cfg.contracts.collateral().ok_or_else(|| {
         anyhow!(
-            "network config {} declares no collateral token (set `contracts.usdc:` or `contracts.wrapped_collateral:`)",
-            a.network_config
+            "network '{}' declares no collateral token (usdc / usdw / wrapped_collateral)",
+            cfg.network.name
         )
     })?;
     let collateral_addr = parse_addr(collateral)
@@ -412,7 +406,7 @@ struct PlannedOp {
 }
 
 async fn run_set(args: &Cli, a: &SetArgs, fmt: Format) -> Result<()> {
-    let cfg = network_config::load(&a.network_config)?;
+    let cfg = crate::networks::effective_network(args)?;
 
     // 1. Resolve identity (signature_type guard + EOA + Safe + scope).
     let ctx = SafeContext::resolve(args, cfg, a.rpc_url.as_deref())?;
@@ -558,7 +552,7 @@ mod tests {
 
     #[test]
     fn resolve_spenders_explicit_override_returns_single_entry() {
-        let cfg = network_config::load("../examples/networks/monad-hermestrade.yaml").unwrap();
+        let cfg = crate::networks::get("monad").unwrap();
         let out = resolve_spenders(
             &cfg,
             Some("0x017641abFa4264121237023f9Fe678BF00F60De8"),
@@ -573,7 +567,7 @@ mod tests {
 
     #[test]
     fn resolve_spenders_yaml_default_lists_three_targets() {
-        let cfg = network_config::load("../examples/networks/monad-hermestrade.yaml").unwrap();
+        let cfg = crate::networks::get("monad").unwrap();
         let out = resolve_spenders(&cfg, None).unwrap();
         assert_eq!(out.len(), 3);
         assert_eq!(out[0].0, "CTF Exchange");
@@ -583,7 +577,7 @@ mod tests {
 
     #[test]
     fn require_collateral_returns_usdw_from_monad_yaml() {
-        let cfg = network_config::load("../examples/networks/monad-hermestrade.yaml").unwrap();
+        let cfg = crate::networks::get("monad").unwrap();
         let (raw, addr) = require_collateral(&cfg).unwrap();
         assert_eq!(raw, "0xb7bD080Df56FA76ce6CA4fA737d47815f7F8e746");
         assert_eq!(
@@ -594,7 +588,7 @@ mod tests {
 
     #[test]
     fn require_multisend_returns_yaml_address() {
-        let cfg = network_config::load("../examples/networks/monad-hermestrade.yaml").unwrap();
+        let cfg = crate::networks::get("monad").unwrap();
         let addr = require_multisend(&cfg).unwrap();
         assert_eq!(
             format!("{addr:?}").to_lowercase(),
@@ -604,7 +598,7 @@ mod tests {
 
     #[test]
     fn require_conditional_tokens_returns_yaml_address() {
-        let cfg = network_config::load("../examples/networks/monad-hermestrade.yaml").unwrap();
+        let cfg = crate::networks::get("monad").unwrap();
         let addr = require_conditional_tokens(&cfg).unwrap();
         // The Monad ConditionalTokens contract sourced from gamma /public-info.
         assert_eq!(

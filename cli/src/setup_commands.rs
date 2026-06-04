@@ -25,8 +25,8 @@ pub async fn run(args: &Cli) -> Result<()> {
     // ── 1: wallet ──────────────────────────────────────────────────────────
     step_header(1, total, "Wallet");
     let cfg = config_store::load(args.config_dir.as_deref())?;
-    // Resolve in the same order every other command uses: flag/env first, config-file as
-    // fallback. A key supplied via `PM_PRIVATE_KEY` should NOT be treated as "no wallet".
+    // Resolve in the same order every other command uses: `--private-key` flag first,
+    // config-file as fallback. A key supplied via the flag should NOT be treated as "no wallet".
     let resolved_key = crate::wallet_commands::resolve_private_key(args).ok();
     let private_key = match resolved_key {
         Some((key, source)) => {
@@ -117,6 +117,8 @@ pub async fn run(args: &Cli) -> Result<()> {
         scope_id: Some(scope_id.clone()),
         signature_type: Some(signature_type_str.clone()),
         safe_address: safe_address.clone(),
+        network: Some(crate::networks::effective_network_name(args, None)),
+        tenant: Some(tenant.clone()),
     };
     let path = config_store::save(args.config_dir.as_deref(), &cfg_to_save)?;
     println!("  ✓ Saved to {}", path.display());
@@ -143,7 +145,7 @@ pub async fn run(args: &Cli) -> Result<()> {
     println!();
     println!("  Next steps:");
     println!("    predict-cli balance --asset-type collateral");
-    println!("    predict-cli approve check --network-config <yaml>");
+    println!("    predict-cli approve check");
     println!("    predict-cli gamma events list --limit 5");
     println!("    predict-cli shell");
     println!();

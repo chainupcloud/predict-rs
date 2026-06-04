@@ -7,9 +7,17 @@ use crate::output::Format;
 #[derive(Debug, Parser)]
 #[command(name = "predict-cli", version, about = "Prediction market terminal client", long_about = None)]
 pub struct Cli {
-    /// Tenant root host. The CLOB / Gamma / WebSocket endpoints are derived using the canonical
-    /// canonical subdomain pattern (`clob-api.<host>` / `gamma-api.<host>` / `clob-ws.<host>`).
-    /// Either this OR `--clob-endpoint` must be supplied — they are mutually exclusive.
+    /// Built-in network to use (selects chain id, endpoints, and all contract addresses).
+    /// Defaults to `monad` when neither this flag nor `config.toml` sets one. Run
+    /// `predict-cli endpoints` to see what a selection resolves to.
+    #[arg(long, global = true, env = "PM_NETWORK")]
+    pub network: Option<String>,
+
+    /// Tenant root host override. The CLOB / Gamma / WebSocket endpoints are derived from this
+    /// using the canonical subdomain pattern (`clob-api.<host>` / `gamma-api.<host>` /
+    /// `clob-ws.<host>`). Resolution order: this flag > `config.toml` `tenant` > the selected
+    /// network's domain (e.g. `hermestrade.xyz` for `monad`). Set it for the
+    /// same-network / different-tenant case. Mutually exclusive with `--clob-endpoint`.
     #[arg(long, global = true, env = "PM_TENANT", conflicts_with = "clob_endpoint")]
     pub tenant: Option<String>,
 
@@ -34,16 +42,17 @@ pub struct Cli {
     #[arg(long, global = true, env = "PM_CHAIN_ID")]
     pub chain_id: Option<u64>,
 
-    /// EOA private key (hex, with or without `0x` prefix) used to sign L1 EIP-712 challenges.
-    /// Required by every signing subcommand. Prefer the env var over the flag — exposing a
-    /// private key in shell history is unsafe. When absent, falls back to the value stored
-    /// by `predict-cli wallet create` / `predict-cli wallet import` in `<config-dir>/config.toml`.
-    #[arg(long, global = true, env = "PM_PRIVATE_KEY", hide_env_values = true)]
+    /// EOA private key (hex, with or without `0x` prefix) used to sign EIP-712 challenges and
+    /// orders. When absent, falls back to the key stored in `<config-dir>/config.toml` by
+    /// `predict-cli wallet create` / `wallet import` / `setup`. The `PM_PRIVATE_KEY` env var is
+    /// intentionally NOT supported — a private key in the environment leaks via
+    /// `/proc/<pid>/environ` and to child processes. Pass the flag or use the config file.
+    #[arg(long, global = true)]
     pub private_key: Option<String>,
 
     /// Override the directory holding `config.toml` (default: `dirs::config_dir()/pm`,
-    /// i.e. `~/.config/pm` on Linux). Used by `predict-cli wallet …` for persistence and by every
-    /// other command as the final fallback for `--private-key` / `--chain-id` / `--scope-id`.
+    /// i.e. `~/.config/pm` on Linux). Holds the private key (mode 0600) and is the fallback
+    /// source for `--private-key` / `--chain-id` / `--scope-id` / `--network`.
     #[arg(long, global = true, env = "PM_CONFIG_DIR")]
     pub config_dir: Option<String>,
 

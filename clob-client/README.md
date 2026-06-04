@@ -260,7 +260,7 @@ while let Some(event) = stream.next().await {
 | `Order` EIP-712 domain `name` | upstream V1 domain string | `"Prediction Market Protocol"` |
 | Auth headers | `POLY_API_KEY` / `POLY_SIGNATURE` / … | **`PRED_API_KEY` / `PRED_SIGNATURE` / …** |
 | HMAC base64 | URL-safe | **Standard** |
-| Contract addresses | Hard-coded `phf_map!` in `lib.rs` | Runtime config — caller supplies them. Example YAMLs under [`../examples/networks/`](../examples/networks/). |
+| Contract addresses | Hard-coded `phf_map!` in `lib.rs` | Runtime config — the caller supplies them. (The `predict-cli` CLI ships a built-in network registry selected via `--network`; the SDK itself stays network-agnostic.) |
 
 Full diff table: [`../docs/diff-vs-upstream-v1.md`](../docs/diff-vs-upstream-v1.md).
 

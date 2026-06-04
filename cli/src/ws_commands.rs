@@ -10,7 +10,6 @@ use futures::StreamExt as _;
 use predict_rs_clob_client::clob::ws::types::request::MarketLevel;
 use predict_rs_clob_client::{
     Client, ClientBuilder, ClobWebSocketClient, Credentials, MarketSubscribeOpts,
-    PMCup26Signer,
 };
 use predict_rs_clob_client::clob::ws::types::response::{MarketEvent, UserEvent};
 
@@ -118,26 +117,17 @@ async fn run_user(args: &Cli, a: WsUserArgs, fmt: Format) -> anyhow::Result<()> 
 fn build_unauth_client(args: &Cli) -> anyhow::Result<Client> {
     let endpoints = crate::commands::resolve_endpoints_pub(args)?;
     let mut b = Client::builder().endpoints(endpoints);
-    if let Some(cid) = args.chain_id {
+    if let Some(cid) = crate::commands::effective_chain_id(args)? {
         b = b.chain_id(cid);
     }
     b.build().context("build client")
 }
 
 async fn build_l2_client(args: &Cli) -> anyhow::Result<Client> {
-    use predict_rs_clob_client::types::ScopeId;
-    let pk = args.private_key.as_deref().ok_or_else(|| {
-        anyhow!("private key required for /ws/user: pass --private-key or set PM_PRIVATE_KEY")
-    })?;
-    let chain_id = args.chain_id.ok_or_else(|| {
-        anyhow!("chain id required for /ws/user: pass --chain-id or set PM_CHAIN_ID")
-    })?;
-    let mut signer = PMCup26Signer::from_hex(pk, chain_id)?;
-    if !args.scope_id.is_empty() {
-        let scope = ScopeId::from_hex(&args.scope_id)
-            .with_context(|| format!("invalid --scope-id '{}'", args.scope_id))?;
-        signer = signer.with_scope_id(scope);
-    }
+    // Same key / chain / scope resolution as every other signing command
+    // (`--private-key` flag → `config.toml` → selected network), so /ws/user works off the
+    // stored wallet rather than requiring the key on the command line.
+    let signer = crate::commands::signer_from_args(args)?;
 
     let creds = match args.credentials.as_deref() {
         Some(path) => {
@@ -154,7 +144,7 @@ async fn build_l2_client(args: &Cli) -> anyhow::Result<Client> {
 
     let endpoints = crate::commands::resolve_endpoints_pub(args)?;
     let mut b: ClientBuilder = Client::builder().endpoints(endpoints);
-    if let Some(cid) = args.chain_id {
+    if let Some(cid) = crate::commands::effective_chain_id(args)? {
         b = b.chain_id(cid);
     }
     Ok(b.credentials(creds).signer_address(signer.address()).build()?)

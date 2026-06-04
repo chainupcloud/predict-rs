@@ -1,8 +1,9 @@
-# Reference network configuration: Monad tenant `hermestrade.xyz`.
+# Built-in network definition: Monad tenant `hermestrade.xyz`.
 #
-# Per pm-rs/CLAUDE.md, contract addresses must NOT be hard-coded in the SDK.
-# This file is a CALLER-SUPPLIED reference: copy it, edit it, and pass values
-# to the SDK / CLI at runtime (CLI flags, env vars, or a tenant config loader).
+# Compiled into the `predict-cli` binary via `include_str!` (see cli/src/networks.rs) and
+# selected with `--network monad` (the default). This is the single source of truth for the
+# Monad deployment's chain id, endpoints, and contract addresses — there is no runtime
+# network YAML to supply. The SDK itself stays address-agnostic; only the CLI ships this.
 #
 # Source: Telegram message from cryptorobsu, 2026-05-19.
 
