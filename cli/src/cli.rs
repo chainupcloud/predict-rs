@@ -152,6 +152,10 @@ pub enum Command {
     Ctf(crate::ctf_commands::CtfArgs),
     /// Deposit (充值): wrap the EOA's USDC into USDW, minted to your Safe. Direct EOA tx.
     Deposit(crate::wusd_commands::DepositArgs),
+    /// Withdraw (提现): `initiate` burns the Safe's USDW via the relayer, then `claim` releases
+    /// USDC to the Safe after the on-chain unwrap delay.
+    #[command(subcommand)]
+    Withdraw(crate::wusd_commands::WithdrawCommand),
 }
 
 #[derive(Debug, clap::Args)]

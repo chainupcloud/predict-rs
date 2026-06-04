@@ -77,6 +77,18 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
         return crate::wusd_commands::run_deposit(&owned, &dargs, fmt).await;
     }
 
+    // `predict-cli withdraw …` — initiate (Safe meta-tx via relayer) + claim (direct EOA tx);
+    // no CLOB endpoint required, so dispatch before endpoint resolution.
+    if matches!(args.command, Command::Withdraw(_)) {
+        let mut owned = args;
+        let fmt = owned.output;
+        let sub = match std::mem::replace(&mut owned.command, Command::Ok) {
+            Command::Withdraw(w) => w,
+            _ => unreachable!(),
+        };
+        return crate::wusd_commands::run_withdraw(&owned, &sub, fmt).await;
+    }
+
     let endpoints = resolve_endpoints(&args)?;
     let mut builder = Client::builder().endpoints(endpoints);
     if let Some(cid) = effective_chain_id(&args)? {
@@ -240,6 +252,7 @@ pub async fn run(args: Cli) -> anyhow::Result<()> {
         Command::Setup => unreachable!("handled by early-return above"),
         Command::Ctf(_) => unreachable!("handled by early-return above"),
         Command::Deposit(_) => unreachable!("handled by early-return above"),
+        Command::Withdraw(_) => unreachable!("handled by early-return above"),
     }
     Ok(())
 }
