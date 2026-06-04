@@ -48,6 +48,10 @@ contracts:
   fee_vault: "0x222Cfc7134E44b4e2ccDBB59C94933f491660B08"
   usdw: "0xb7bD080Df56FA76ce6CA4fA737d47815f7F8e746"
   usd_wrapper: "0x119ED2fa6179052F04b89C7507E0681dc417D2c1"
+  # Underlying USDC that USDWrapper.wrap() pulls (the `predict-cli deposit` asset). Verified
+  # on-chain 2026-06-04: symbol USDC, 6 decimals, whitelisted in the wrapper. NOT the trading
+  # collateral (that's `usdw`); this is the asset you deposit to mint USDW.
+  usdw_underlying: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603"
 
 security:
   contract_whitelist:

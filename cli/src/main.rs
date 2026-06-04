@@ -9,11 +9,13 @@ mod network_config;
 mod networks;
 mod order_commands;
 mod output;
+mod safe_create;
 mod safe_exec;
 mod setup_commands;
 mod shell_commands;
 mod wallet_commands;
 mod ws_commands;
+mod wusd_commands;
 
 use clap::Parser;
 

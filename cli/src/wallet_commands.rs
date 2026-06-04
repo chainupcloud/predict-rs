@@ -31,6 +31,9 @@ pub enum WalletCommand {
     /// Fetch the Safe address from the server via `GET /auth/api-keys` and save it.
     /// Requires an L2 key to already exist for the configured signer.
     DetectSafe,
+    /// Create the EOA's Gnosis Safe on-chain via the relayer's SAFE-CREATE (relayer pays gas).
+    /// Deterministic address from (EOA, scopeId); one-shot. Saves it to config on success.
+    DeploySafe(crate::safe_create::DeploySafeArgs),
 }
 
 #[derive(Debug, Args)]
@@ -75,6 +78,7 @@ pub async fn run(args: &Cli, sub: &WalletCommand, fmt: Format) -> Result<()> {
         WalletCommand::Reset(a) => run_reset(dir_override, a.force, fmt),
         WalletCommand::SetSafe(a) => run_set_safe(dir_override, a, fmt),
         WalletCommand::DetectSafe => run_detect_safe(args, fmt).await,
+        WalletCommand::DeploySafe(a) => crate::safe_create::run(args, a, fmt).await,
     }
 }
 
