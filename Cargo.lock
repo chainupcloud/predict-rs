@@ -3522,7 +3522,7 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
 name = "predict-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "alloy",
  "anyhow",
@@ -3550,7 +3550,7 @@ dependencies = [
 
 [[package]]
 name = "predict-rs-clob-client"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "alloy",
  "alloy-sol-types",
