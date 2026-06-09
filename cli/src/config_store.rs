@@ -8,13 +8,16 @@
 //!   2. `PM_CONFIG_DIR` env var
 //!   3. `dirs::config_dir()/predict` (Linux: `~/.config/predict`, macOS: `~/Library/Application Support/predict`)
 //!
+//! An optional `--slug <name>` / `PM_SLUG` nests one level deeper — the effective directory
+//! becomes `<base>/<name>` — so several accounts can share one base. See [`resolve_with_slug`].
+//!
 //! The store is a single TOML file `config.toml` inside that directory. Writes are atomic
 //! (write to a sibling temp file then rename) and the file is created with mode 0600 on
 //! Unix; the parent directory is created with mode 0700.
 
 use std::fs;
 use std::io::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
@@ -69,6 +72,35 @@ pub fn config_dir(cli_override: Option<&str>) -> Result<PathBuf> {
 
 pub fn config_path(cli_override: Option<&str>) -> Result<PathBuf> {
     Ok(config_dir(cli_override)?.join(CONFIG_FILE_NAME))
+}
+
+/// Resolve the config dir, applying an optional account `slug` as a nested leaf under the base
+/// (`<base>/<slug>`). The base is resolved by [`config_dir`], so `--config-dir` / `PM_CONFIG_DIR`
+/// / the platform default all act as the base. A `None` slug yields the base unchanged.
+pub fn resolve_with_slug(cli_override: Option<&str>, slug: Option<&str>) -> Result<PathBuf> {
+    let base = config_dir(cli_override)?;
+    match slug {
+        Some(s) => {
+            validate_slug(s)?;
+            Ok(base.join(s))
+        }
+        None => Ok(base),
+    }
+}
+
+/// A slug must be a single, normal path segment so it can only ever name a direct child of the
+/// base dir — never escape it. Rejects empty, separators, `.` / `..`, and absolute fragments.
+fn validate_slug(slug: &str) -> Result<()> {
+    if slug.is_empty() {
+        return Err(anyhow!("--slug must not be empty"));
+    }
+    let mut comps = Path::new(slug).components();
+    match (comps.next(), comps.next()) {
+        (Some(Component::Normal(_)), None) => Ok(()),
+        _ => Err(anyhow!(
+            "invalid --slug {slug:?}: must be a single path segment (no '/', '\\', '..', '.')"
+        )),
+    }
 }
 
 /// Returns `Ok(None)` if the config file does not exist, otherwise the decoded `StoredConfig`.
@@ -241,5 +273,46 @@ mod tests {
             None => unsafe { std::env::remove_var("PM_CONFIG_DIR") },
         }
         assert_eq!(loaded.chain_id, Some(42));
+    }
+
+    #[test]
+    fn resolve_with_slug_nests_under_base() {
+        let t = TempDir::new().unwrap();
+        let base = cfg_override(&t);
+        let dir = resolve_with_slug(Some(&base), Some("acctA")).unwrap();
+        assert_eq!(dir, t.path().join("acctA"));
+    }
+
+    #[test]
+    fn resolve_with_slug_none_returns_base() {
+        let t = TempDir::new().unwrap();
+        let base = cfg_override(&t);
+        let dir = resolve_with_slug(Some(&base), None).unwrap();
+        assert_eq!(dir, t.path());
+    }
+
+    #[test]
+    fn resolve_with_slug_rejects_traversal_and_separators() {
+        for bad in ["..", "../escape", "a/b", "/abs", "", ".", "x/../y"] {
+            assert!(
+                resolve_with_slug(Some("/tmp/base"), Some(bad)).is_err(),
+                "slug {bad:?} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn save_then_load_through_resolved_slug_dir() {
+        let t = TempDir::new().unwrap();
+        let base = cfg_override(&t);
+        let dir = resolve_with_slug(Some(&base), Some("acctB")).unwrap();
+        let dir_str = dir.to_string_lossy().into_owned();
+        save(
+            Some(&dir_str),
+            &StoredConfig { chain_id: Some(7), ..Default::default() },
+        )
+        .unwrap();
+        assert!(t.path().join("acctB").join(CONFIG_FILE_NAME).exists());
+        assert_eq!(load(Some(&dir_str)).unwrap().unwrap().chain_id, Some(7));
     }
 }

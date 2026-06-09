@@ -15,7 +15,18 @@ use url::Url;
 use crate::cli::{AuthCommand, BalanceArgs, Cli, Command, CreateKeyArgs, DeleteKeyArgs};
 use crate::output::{self, Format};
 
-pub async fn run(args: Cli) -> anyhow::Result<()> {
+pub async fn run(mut args: Cli) -> anyhow::Result<()> {
+    // Resolve `--slug` (account shorthand) into `config_dir` once, up front. Every downstream
+    // config read/write keys off `args.config_dir`, so collapsing the slug into it here makes
+    // the whole command tree target `<base>/<slug>` without threading the slug through each call.
+    if args.slug.is_some() {
+        let dir = crate::config_store::resolve_with_slug(
+            args.config_dir.as_deref(),
+            args.slug.as_deref(),
+        )?;
+        args.config_dir = Some(dir.to_string_lossy().into_owned());
+    }
+
     // `predict-cli wallet …` is local-only — no endpoint required. Dispatch before endpoint
     // resolution so the wallet UX works on a fresh checkout with no flags set.
     if matches!(args.command, Command::Wallet(_)) {
