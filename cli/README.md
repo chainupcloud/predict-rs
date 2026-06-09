@@ -79,7 +79,8 @@ predict-cli order list
 predict-cli order cancel <ORDER_ID>
 ```
 
-The config dir defaults to `~/.config/predict` (Linux, mode 0700); override with `--config-dir`.
+The config dir defaults to `~/.config/predict` (Linux, mode 0700); override with `--config-dir`, or
+select a per-account subdir with `--slug` / `-s` (see **Multiple accounts** under Configuration).
 
 ## Configuration
 
@@ -107,6 +108,31 @@ to `monad`, which supplies the chain id, endpoints, exchange, and all contract a
 read-only commands need no config at all. Any field is overridden for a single command by its
 matching flag (`--network`, `--tenant`, `--scope-id`, `--signature-type`, `--private-key`, …),
 which wins over the file.
+
+### Multiple accounts — `--slug` / `-s`
+
+Run several wallets side by side by giving each its own config dir. `--slug <name>` (short `-s`)
+nests one level under the base: the effective file becomes `<config-dir>/<name>/config.toml`
+(default `~/.config/predict/<name>/config.toml`). It is a global flag — put it before or after any
+subcommand — and `<name>` must be a single path segment (no `/` or `..`).
+
+```bash
+# Set up two isolated accounts (each gets its own key / Safe / scope under its own dir)
+predict-cli -s acctA wallet create
+predict-cli -s acctA wallet deploy-safe
+predict-cli -s acctA auth create-key
+predict-cli -s acctB wallet create        # account B lives in ~/.config/predict/acctB/
+
+# Then prefix any command with the account
+predict-cli -s acctA order list
+predict-cli -s acctB balance --asset-type collateral
+```
+
+`--config-dir` still works and acts as the base, so `--config-dir /data/pm -s acctA` resolves to
+`/data/pm/acctA/`. Launching the REPL with an account — `predict-cli -s acctA shell` — scopes the
+whole session: every line that does not name an account of its own runs as `acctA` (a line can
+still override with its own `--config-dir` / `-s`). Each invocation is an independent process
+reading only its own dir, so accounts never cross.
 
 ### Signature types
 

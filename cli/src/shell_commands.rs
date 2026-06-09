@@ -1,9 +1,10 @@
 //! `predict-cli shell` — interactive REPL.
 //!
 //! Each line is parsed as a fresh `Cli` invocation via `clap::Parser::try_parse_from`.
-//! Global state (wallet, tenant, credentials) is read from env vars / config file on every
-//! command, the same as a normal CLI invocation — there is no "shell session" stickiness
-//! beyond what env vars provide.
+//! Most global state (wallet, tenant, credentials) is read from env vars / config file on every
+//! command, the same as a normal CLI invocation. The one piece of session stickiness: the
+//! launch-time account directory (resolved from `-s` / `--slug` / `--config-dir`) is inherited
+//! by every line that does not select an account of its own — see [`parse_line`].
 //!
 //! Pattern lifted from the upstream CLI's `shell.rs`; the structure (banner, rustyline loop,
 //! reject `shell`-in-`shell`, `Box::pin` to break async recursion) is intentional.
@@ -13,10 +14,13 @@ use clap::Parser as _;
 use crate::cli::Cli;
 use crate::output::Format;
 
-pub async fn run() -> anyhow::Result<()> {
+pub async fn run(inherited_dir: Option<String>) -> anyhow::Result<()> {
     println!();
     println!("  predict-cli · Interactive Shell");
     println!("  Type 'help' for commands, 'exit' or Ctrl-D to quit.");
+    if let Some(ref dir) = inherited_dir {
+        println!("  account dir: {dir}  (override per line with --config-dir / -s)");
+    }
     println!();
 
     let mut rl = rustyline::DefaultEditor::new()?;
@@ -52,7 +56,7 @@ pub async fn run() -> anyhow::Result<()> {
                     continue;
                 }
 
-                match Cli::try_parse_from(&full_args) {
+                match parse_line(&full_args, &inherited_dir) {
                     Ok(cli) => {
                         let format = cli.output;
                         // Box::pin breaks the type-level cycle: shell -> commands::run ->
@@ -114,6 +118,21 @@ fn history_path() -> Option<std::path::PathBuf> {
     Some(dir.join("history"))
 }
 
+/// Parse one REPL line (argv including the `predict-cli` argv[0]) into a `Cli`, applying
+/// shell-session inheritance: a line that selects no account of its own — no `--config-dir`,
+/// `-s`/`--slug`, and no `PM_CONFIG_DIR`/`PM_SLUG` env (clap fills those before we look) —
+/// inherits the shell's launch-time `inherited_dir`. Per-line flags and `PM_*` env still win.
+/// `inherited_dir` is already slug-collapsed by `commands::run`, so it is assigned to
+/// `config_dir` with `slug` left `None`, which means the downstream collapse is a no-op (no
+/// double-nesting into `<dir>/<slug>/<slug>`).
+fn parse_line(full_args: &[String], inherited_dir: &Option<String>) -> Result<Cli, clap::Error> {
+    let mut cli = Cli::try_parse_from(full_args)?;
+    if cli.config_dir.is_none() && cli.slug.is_none() {
+        cli.config_dir = inherited_dir.clone();
+    }
+    Ok(cli)
+}
+
 /// Tokenize a shell-style line: split on whitespace, honor double quotes for spaces.
 /// Adapted from the upstream CLI's shell.rs::split_args.
 fn split_args(input: &str) -> Vec<String> {
@@ -140,7 +159,13 @@ fn split_args(input: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::split_args;
+    use super::{parse_line, split_args};
+
+    fn argv(line: &str) -> Vec<String> {
+        let mut v = vec!["predict-cli".to_string()];
+        v.extend(split_args(line));
+        v
+    }
 
     #[test]
     fn split_args_handles_quoted_segments() {
@@ -169,5 +194,59 @@ mod tests {
             split_args(r#"echo "hello world""#),
             vec!["echo".to_string(), "hello world".to_string()]
         );
+    }
+
+    // A line that names its own account must NOT inherit the shell's launch dir. These are
+    // deterministic regardless of ambient env because a per-line flag wins over env.
+    #[test]
+    fn line_with_own_slug_overrides_inheritance() {
+        let cli = parse_line(&argv("-s acctB ok"), &Some("/root/acctA".into())).unwrap();
+        assert_eq!(cli.slug.as_deref(), Some("acctB"));
+        assert_ne!(cli.config_dir.as_deref(), Some("/root/acctA"));
+    }
+
+    #[test]
+    fn line_with_own_config_dir_overrides_inheritance() {
+        let cli = parse_line(&argv("--config-dir /other ok"), &Some("/root/acctA".into())).unwrap();
+        assert_eq!(cli.config_dir.as_deref(), Some("/other"));
+    }
+
+    // The load-bearing case: a bare line inherits the launch dir, and because `inherited_dir` is
+    // already slug-collapsed and we leave `slug` None, the downstream collapse is a no-op — the
+    // effective dir is `/root/acctA`, never `/root/acctA/acctA`. Env is cleared so the parse
+    // reflects only the (absent) line flags; same unsafe save/restore convention as
+    // `config_store`'s env test.
+    #[test]
+    fn bare_line_inherits_launch_dir_without_double_nesting() {
+        let prev_dir = std::env::var("PM_CONFIG_DIR").ok();
+        let prev_slug = std::env::var("PM_SLUG").ok();
+        unsafe {
+            std::env::remove_var("PM_CONFIG_DIR");
+            std::env::remove_var("PM_SLUG");
+        }
+        let cli = parse_line(&argv("wallet show"), &Some("/root/acctA".into())).unwrap();
+        unsafe {
+            match prev_dir {
+                Some(v) => std::env::set_var("PM_CONFIG_DIR", v),
+                None => std::env::remove_var("PM_CONFIG_DIR"),
+            }
+            match prev_slug {
+                Some(v) => std::env::set_var("PM_SLUG", v),
+                None => std::env::remove_var("PM_SLUG"),
+            }
+        }
+        assert_eq!(cli.config_dir.as_deref(), Some("/root/acctA"));
+        assert_eq!(cli.slug, None);
+        let eff =
+            crate::config_store::resolve_with_slug(cli.config_dir.as_deref(), cli.slug.as_deref())
+                .unwrap();
+        assert_eq!(eff, std::path::Path::new("/root/acctA"));
+    }
+
+    #[test]
+    fn plain_launch_injects_nothing() {
+        // No inherited dir → injection can never introduce one, whatever the line.
+        let cli = parse_line(&argv("-s acctB ok"), &None).unwrap();
+        assert_eq!(cli.slug.as_deref(), Some("acctB"));
     }
 }

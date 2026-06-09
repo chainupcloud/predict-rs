@@ -1,6 +1,6 @@
 [package]
 name = "predict-rs-clob-client"
-version = "0.3.0"
+version = "0.3.1"
 description = "Prediction market CLOB Rust client SDK"
 keywords = ["clob", "prediction-market"]
 categories = ["api-bindings", "finance", "web-programming::http-client"]

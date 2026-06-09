@@ -56,6 +56,15 @@ pub struct Cli {
     #[arg(long, global = true, env = "PM_CONFIG_DIR")]
     pub config_dir: Option<String>,
 
+    /// Account shorthand: select a config dir nested under the base as `<base>/<slug>`, where
+    /// the base is the `--config-dir` / `PM_CONFIG_DIR` / platform-default directory. For
+    /// example `-s acctA` resolves to `<config-dir>/acctA/config.toml` (default
+    /// `~/.config/predict/acctA/config.toml`). Lets you switch accounts by short name instead
+    /// of spelling out a full `--config-dir` path; composes with `--config-dir`, which then
+    /// acts as the base. Must be a single path segment (no `/` or `..`).
+    #[arg(short = 's', long, global = true, env = "PM_SLUG")]
+    pub slug: Option<String>,
+
     /// Global EIP-712 signature type (`eoa` / `proxy` / `gnosis-safe`). Defaults to
     /// `gnosis-safe` — Safe-wallet flow where the EOA signs but the Safe holds
     /// funds and is the `maker`. Persisted by `predict-cli wallet create / import / set-safe`;
@@ -386,5 +395,20 @@ impl From<SideArg> for predict_rs_clob_client::types::Side {
             SideArg::Buy => Self::Buy,
             SideArg::Sell => Self::Sell,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_slug_short_long_and_default() {
+        let c = Cli::try_parse_from(["predict-cli", "-s", "acctA", "ok"]).unwrap();
+        assert_eq!(c.slug.as_deref(), Some("acctA"));
+        let c = Cli::try_parse_from(["predict-cli", "--slug", "acctB", "ok"]).unwrap();
+        assert_eq!(c.slug.as_deref(), Some("acctB"));
+        let c = Cli::try_parse_from(["predict-cli", "ok"]).unwrap();
+        assert_eq!(c.slug, None);
     }
 }

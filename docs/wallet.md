@@ -8,6 +8,11 @@ The store is a TOML file at `<config-dir>/config.toml`. The directory is `--conf
 when given, otherwise `dirs::config_dir()/predict` — on Linux `~/.config/predict`, on macOS
 `~/Library/Application Support/predict`.
 
+Pass `--slug <name>` (short `-s`) to nest a per-account subdir under that base —
+`<config-dir>/<name>/config.toml` — so several wallets live side by side without colliding.
+`<name>` must be a single path segment (no `/` or `..`); it is a global flag, usable before or
+after any subcommand.
+
 The file is created with mode `0600` (Unix); its parent directory is `0700`. Writes go
 through a sibling temp file and `rename(2)` so a crash mid-write cannot truncate the
 existing config.
