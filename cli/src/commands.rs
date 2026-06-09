@@ -40,9 +40,11 @@ pub async fn run(mut args: Cli) -> anyhow::Result<()> {
     }
 
     // `predict-cli shell` is purely local — no endpoint required. Dispatch before endpoint
-    // resolution so users can launch the REPL without any `--tenant` flag.
+    // resolution so users can launch the REPL without any `--tenant` flag. Pass the resolved
+    // (slug-collapsed) account dir so the REPL inherits the launch-time `-s` / `--slug` /
+    // `--config-dir`; without it each line would silently fall back to the default account.
     if matches!(args.command, Command::Shell) {
-        return crate::shell_commands::run().await;
+        return crate::shell_commands::run(args.config_dir.clone()).await;
     }
 
     // `predict-cli setup` runs its own interactive flow; some sub-steps build a Client of their
