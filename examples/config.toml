@@ -3,6 +3,9 @@
 # Copy this file to ~/.config/predict/config.toml (mode 0600) and fill in `private_key`
 # and `safe_address` with your own values. Every other field is real Monad / hermestrade.xyz.
 # Any field can be overridden per-command with the matching flag (--network, --tenant, …).
+#
+# Multiple accounts: keep one such file per account and select it with
+# `predict-cli --slug <name>` (short -s) -> <config-dir>/<name>/config.toml. See cli/README.md.
 
 # --- Your wallet (required). Keep this file mode 0600; the key is never read from an env var. ---
 private_key    = "0xYOUR_64_HEX_PRIVATE_KEY"
